@@ -86,6 +86,31 @@ print( '------------------------------------')
 
 # Loop over RCVRs
 #-----------------------------------------------------------------------
+def init_prev_output(PrevPreproObsInfo):
+    for prn in range(1, Const.MAX_NUM_SATS_CONSTEL + 1):
+        PrevPreproObsInfo["G%02d" % prn] = {
+            "L1_n_1": 0.0,  # t-1 Carrier Phase in L1
+            "L1_n_2": 0.0,  # t-2 Carrier Phase in L1
+            "L1_n_3": 0.0,  # t-3 Carrier Phase in L1
+            "t_n_1": 0.0,  # t-1 epoch
+            "t_n_2": 0.0,  # t-2 epoch
+            "t_n_3": 0.0,  # t-3 epoch
+            "CsBuff": [0] * \
+                      int(Conf["MIN_NCS_TH"][CSNEPOCHS]),  # Number of consecutive epochs for CS
+            "CsIdx": 0,  # Index of CS detector buffer
+            "ResetHatchFilter": 1,  # Flag to reset Hatch filter
+            "Ksmooth": 0,  # Hatch filter K
+            "PrevEpoch": 86400,  # Previous SoD
+            "PrevL1": 0.0,  # Previous L1
+            "PrevSmoothC1": 0.0,  # Previous Smoothed C1
+            "PrevRangeRateL1": 0.0,  # Previous Code Rate
+            "PrevPhaseRateL1": 0.0,  # Previous Phase Rate
+            "PrevGeomFree": 0.0,  # Previous Geometry-Free Observable
+            "PrevGeomFreeEpoch": 0.0,  # Previous Geometry-Free Observable
+            "PrevRej": 0,  # Previous Rejection flag
+            # ...
+        }
+
 for Rcvr in RcvrInfo.keys():
     # Display Message
     print( '\n***-----------------------------***')
@@ -123,29 +148,7 @@ for Rcvr in RcvrInfo.keys():
         EndOfFile = False
         ObsInfo = [None]
         PrevPreproObsInfo = {}
-        for prn in range(1, Const.MAX_NUM_SATS_CONSTEL + 1):
-            PrevPreproObsInfo["G%02d" % prn] = {
-            "L1_n_1": 0.0,           # t-1 Carrier Phase in L1
-            "L1_n_2": 0.0,           # t-2 Carrier Phase in L1
-            "L1_n_3": 0.0,           # t-3 Carrier Phase in L1
-            "t_n_1": 0.0,            # t-1 epoch
-            "t_n_2": 0.0,            # t-2 epoch
-            "t_n_3": 0.0,            # t-3 epoch
-            "CsBuff": [0] * \
-int(Conf["MIN_NCS_TH"][CSNEPOCHS]),  # Number of consecutive epochs for CS
-            "CsIdx": 0,              # Index of CS detector buffer
-            "ResetHatchFilter": 1,   # Flag to reset Hatch filter
-            "Ksmooth": 0,            # Hatch filter K
-            "PrevEpoch": 86400,      # Previous SoD
-            "PrevL1": 0.0,           # Previous L1
-            "PrevSmoothC1": 0.0,     # Previous Smoothed C1
-            "PrevRangeRateL1": 0.0,  # Previous Code Rate
-            "PrevPhaseRateL1": 0.0,  # Previous Phase Rate
-            "PrevGeomFree": 0.0,     # Previous Geometry-Free Observable
-            "PrevGeomFreeEpoch": 0.0,# Previous Geometry-Free Observable
-            "PrevRej": 0,            # Previous Rejection flag
-                                     # ...
-        } # End of SatPreproObsInfo
+        init_prev_output(PrevPreproObsInfo)
 
         # Open OBS file
         with open(ObsFile, 'r') as fobs:
@@ -194,7 +197,7 @@ int(Conf["MIN_NCS_TH"][CSNEPOCHS]),  # Number of consecutive epochs for CS
             fpreprobs.close()
 
             # Display Message
-            print("INFO: Reading file: %s and generating PREPRO figures..." %
+            print("[PETRUS][INFO] Reading file: %s and generating PREPRO figures..." %
             PreproObsFile)
 
             # Generate Preprocessing plots

@@ -980,7 +980,7 @@ def createOutputFile(Path, Hdr):
     #         Descriptor of output file
     
     # Display Message
-    print("INFO: Creating file: %s..." % Path)
+    print("[PETRUS][INFO] Creating file: %s..." % Path)
 
     # Create output directory, if needed
     if not os.path.exists(os.path.dirname(Path)):
