@@ -173,26 +173,25 @@ def checkConfParam(Key, Fields, MinFields, MaxFields, LowLim, UppLim):
 
     # Loop over fields
     for i, Field in enumerate(Fields[1:]):
-        # If float
+        # If integer
         try:
-            # Convert to float and append to the outputs
-            Values.append(float(Field))
-
+            # Convert to int and append to the outputs
+            Values.append(int(Field))
         except:
             # isnumeric check
-            try:
-                Check = unicode(Field).isnumeric()
-
-            except:
-                Check = (Field).isnumeric()
-
-            # If it is integer
-            if(Check):
-                # Convert to int and append to the outputs
-                Values.append(int(Field))
+            # If it is float
+            # TODO Improve how strings are converted to numeric values
+            isnumeric = (Field).replace('.','').isnumeric() or \
+                        (Field).replace('-', '').replace('.','').isnumeric() or \
+                        (Field).replace('e-', '').isnumeric() or \
+                        (Field).replace('e', '').isnumeric() or \
+                        (Field).replace('e+', '').isnumeric()
+            if isnumeric:
+                # Convert to float and append to the outputs
+                Values.append(float(Field))
 
             else:
-                # Append to the outputs
+                # Append to the outputs (e.g. dates, or other kind of strings)
                 Values.append(Field)
 
     # End of for i, Field in enumerate(Fields[1:]):
