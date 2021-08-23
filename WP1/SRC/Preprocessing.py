@@ -27,10 +27,12 @@ Common = os.path.dirname(os.path.dirname(
 sys.path.insert(0, Common)
 from collections import OrderedDict
 from COMMON import GnssConstants as Const
+from COMMON.Utils import *
+from COMMON.Iono import computeIonoMappingFunction
+
 from InputOutput import RcvrIdx, ObsIdx, REJECTION_CAUSE
 from InputOutput import FLAG, VALUE, TH, CSNEPOCHS
 import numpy as np
-from COMMON.Iono import computeIonoMappingFunction
 
 # Preprocessing internal functions
 #-----------------------------------------------------------------------
@@ -118,8 +120,7 @@ def reject_sats_lower_elev(Conf, PreproObsInfo, n_sats_to_reject):
         # Get the sat
         sat_to_reject = min(sats_elevation, key=sats_elevation.get)
         # Reject it
-        PreproObsInfo[sat_to_reject]['ValidL1'] = 0
-        PreproObsInfo[sat_to_reject]['RejectionCause'] = REJECTION_CAUSE["NCHANNELS_GPS"]
+        set_sat_valid(sat_to_reject, False, REJECTION_CAUSE['NCHANNELS_GPS'], PreproObsInfo)
 
         del sats_elevation[sat_to_reject]
 
@@ -171,10 +172,47 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
     init_output(ObsInfo, PreproObsInfo)
 
     # Limit the satellites to the Number of Channels
+    # [T2.0 CHANNELS][PETRUS-PPVE-REQ-010]
     # ----------------------------------------------------------
     n_sats_to_reject = len(PreproObsInfo.keys()) - Conf['NCHANNELS_GPS']
     if n_sats_to_reject > 0:
         reject_sats_lower_elev(Conf, PreproObsInfo, n_sats_to_reject)
+
+    # Loop over all satellites
+    for prn in range(1, Const.MAX_NUM_SATS_CONSTEL + 1):
+        sat_label = get_sat_label(prn)
+
+        # Checks
+        if not sat_label in PreproObsInfo:
+            continue
+        if not PreproObsInfo[sat_label]['ValidL1']:
+            continue
+
+        # Reject satellites whose Elevation is lower than the Masking Angle.
+        # [T2.1 ELEVATION][NO REQUIREMENT ASSOCIATED]
+        # ------------------------------------------------------------------------------
+        if PreproObsInfo[sat_label]["Elevation"] < Conf["RCVR_MASK"]:
+            set_sat_valid(sat_label, False, REJECTION_CAUSE['MASKANGLE'], PreproObsInfo)
+
+        # Measurement quality monitoring (SNR, PSR OUTRNG)
+        # ------------------------------------------------------------------------------
+
+        # Check Signal To Noise Ratio in front of Minimum by configuration (if activated)
+        # [T2.2 SNR CHECK][PETRUS-PPVE-REQ-020]
+        # ------------------------------------------------------------------------------
+        check_SNR, SNR_threshold = Conf["MIN_CNR"][0], Conf["MIN_CNR"][1]
+        if check_SNR:
+            if PreproObsInfo[sat_label]["S1"] < SNR_threshold:
+                set_sat_valid(sat_label, False, REJECTION_CAUSE['MIN_CNR'], PreproObsInfo)
+
+        # Check Pseudo-ranges Out-of-Range in front of Maximum by configuration (if activated)
+        # [T2.3 OUT-OF-RANGE][NO REQUIREMENT ASSOCIATED]
+        # ------------------------------------------------------------------------------
+        check_PSR, PSR_threshold = Conf["MAX_PSR_OUTRNG"][0], Conf["MAX_PSR_OUTRNG"][1]
+        if check_PSR:
+            if PreproObsInfo[sat_label]["C1"] > PSR_threshold:
+                set_sat_valid(sat_label, False, REJECTION_CAUSE['MAX_PSR_OUTRNG'], PreproObsInfo)
+
 
     return PreproObsInfo
 
