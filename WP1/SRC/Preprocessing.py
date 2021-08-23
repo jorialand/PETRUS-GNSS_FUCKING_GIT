@@ -36,61 +36,6 @@ from COMMON.Iono import computeIonoMappingFunction
 #-----------------------------------------------------------------------
 
 
-def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
-    # Purpose: preprocess GNSS raw measurements from OBS file
-    #          and generate PREPRO OBS file with the cleaned,
-    #          smoothed measurements
-
-    #          More in detail, this function handles:
-             
-    #          * Measurements cleaning and validation and exclusion due to different 
-    #          criteria as follows:
-    #             - Minimum Masking angle
-    #             - Maximum Number of channels
-    #             - Minimum Carrier-To-Noise Ratio (CN0)
-    #             - Pseudo-Range Output of Range 
-    #             - Maximum Pseudo-Range Step
-    #             - Maximum Pseudo-Range Rate
-    #             - Maximum Carrier Phase Increase
-    #             - Maximum Carrier Phase Increase Rate
-    #             - Data Gaps checks and handling 
-    #             - Cycle Slips detection
-
-    #         * Filtering/Smoothing of Code-Phase Measurements with a Hatch filter 
-
-    # Parameters
-    # ==========
-    # Conf: dict
-    #         Configuration dictionary
-    # Rcvr: list
-    #         Receiver information: position, masking angle...
-    # ObsInfo: list
-    #         OBS info for current epoch
-    #         ObsInfo[1][1] is the second field of the 
-    #         second satellite
-    # PrevPreproObsInfo: dict
-    #         Preprocessed observations for previous epoch per sat
-    #         PrevPreproObsInfo["G01"]["C1"]
-
-    # Returns
-    # =======
-    # PreproObsInfo: dict
-    #         Preprocessed observations for current epoch per sat
-    #         PreproObsInfo["G01"]["C1"]
-    
-
-    # Initialize output
-    PreproObsInfo = OrderedDict({})
-    init_output(ObsInfo, PreproObsInfo)
-
-    # Limit the satellites to the Number of Channels
-    # ----------------------------------------------------------
-    # ...
-
-    return PreproObsInfo
-
-# End of function runPreProcMeas()
-
 def init_output(ObsInfo, PreproObsInfo):
     """
     Fills PreproObsInfo from ObsInfo data.
@@ -155,6 +100,84 @@ def init_output(ObsInfo, PreproObsInfo):
 
         # Prepare output for the satellite
         PreproObsInfo[SatLabel] = SatPreproObsInfo
+
+def reject_sats_lower_elev(Conf, PreproObsInfo, n_sats_to_reject):
+    """
+    Invalidates the n_sats_to_reject satellites with poorer visibility (i.e. elevation angle) from PreproObsInfo.
+    :param Conf:
+    :param PreproObsInfo: preprocessed observations
+    :param n_sats_to_reject: number of sats to be rejected. (int>0)
+    :return:
+    """
+    # Checks
+    if n_sats_to_reject <= 0:
+        return
+
+    sats_elevation = {sat: sat_info['Elevation'] for (sat, sat_info) in PreproObsInfo.items()}
+    for i in range(n_sats_to_reject):
+        # Get the sat
+        sat_to_reject = min(sats_elevation, key=sats_elevation.get)
+        # Reject it
+        PreproObsInfo[sat_to_reject]['ValidL1'] = 0
+        PreproObsInfo[sat_to_reject]['RejectionCause'] = REJECTION_CAUSE["NCHANNELS_GPS"]
+
+        del sats_elevation[sat_to_reject]
+
+def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
+    # Purpose: preprocess GNSS raw measurements from OBS file
+    #          and generate PREPRO OBS file with the cleaned,
+    #          smoothed measurements
+
+    #          More in detail, this function handles:
+
+    #          * Measurements cleaning and validation and exclusion due to different
+    #          criteria as follows:
+    #             - Minimum Masking angle
+    #             - Maximum Number of channels
+    #             - Minimum Carrier-To-Noise Ratio (CN0)
+    #             - Pseudo-Range Output of Range
+    #             - Maximum Pseudo-Range Step
+    #             - Maximum Pseudo-Range Rate
+    #             - Maximum Carrier Phase Increase
+    #             - Maximum Carrier Phase Increase Rate
+    #             - Data Gaps checks and handling
+    #             - Cycle Slips detection
+
+    #         * Filtering/Smoothing of Code-Phase Measurements with a Hatch filter
+
+    # Parameters
+    # ==========
+    # Conf: dict
+    #         Configuration dictionary
+    # Rcvr: list
+    #         Receiver information: position, masking angle...
+    # ObsInfo: list
+    #         OBS info for current epoch
+    #         ObsInfo[1][1] is the second field of the
+    #         second satellite
+    # PrevPreproObsInfo: dict
+    #         Preprocessed observations for previous epoch per sat
+    #         PrevPreproObsInfo["G01"]["C1"]
+
+    # Returns
+    # =======
+    # PreproObsInfo: dict
+    #         Preprocessed observations for current epoch per sat
+    #         PreproObsInfo["G01"]["C1"]
+
+
+    # Initialize output
+    PreproObsInfo = OrderedDict({})
+    init_output(ObsInfo, PreproObsInfo)
+
+    # Limit the satellites to the Number of Channels
+    # ----------------------------------------------------------
+    n_sats_to_reject = len(PreproObsInfo.keys()) - Conf['NCHANNELS_GPS']
+    if n_sats_to_reject > 0:
+        reject_sats_lower_elev(Conf, PreproObsInfo, n_sats_to_reject)
+
+    return PreproObsInfo
+
 
 
 ########################################################################
