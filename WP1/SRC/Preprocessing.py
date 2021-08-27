@@ -19,8 +19,9 @@
 
 
 # Import External and Internal functions and Libraries
-#----------------------------------------------------------------------
+# ----------------------------------------------------------------------
 import sys, os
+
 # Add path to find all modules
 Common = os.path.dirname(os.path.dirname(
     os.path.abspath(sys.argv[0]))) + '/COMMON'
@@ -34,9 +35,9 @@ from InputOutput import RcvrIdx, ObsIdx, REJECTION_CAUSE
 from InputOutput import FLAG, VALUE, TH, CSNEPOCHS
 import numpy as np
 
-# Preprocessing internal functions
-#-----------------------------------------------------------------------
 
+# Preprocessing internal functions
+# -----------------------------------------------------------------------
 
 def init_output(ObsInfo, PreproObsInfo):
     """
@@ -103,6 +104,7 @@ def init_output(ObsInfo, PreproObsInfo):
         # Prepare output for the satellite
         PreproObsInfo[SatLabel] = SatPreproObsInfo
 
+
 def reject_sats_lower_elev(Conf, PreproObsInfo, n_sats_to_reject):
     """
     Invalidates the n_sats_to_reject satellites with poorer visibility (i.e. elevation angle) from PreproObsInfo.
@@ -115,7 +117,10 @@ def reject_sats_lower_elev(Conf, PreproObsInfo, n_sats_to_reject):
     if n_sats_to_reject <= 0:
         return
 
+    # Build a dict with only PRN vs Elevation
     sats_elevation = {sat: sat_info['Elevation'] for (sat, sat_info) in PreproObsInfo.items()}
+
+    # Reject satellites
     for i in range(n_sats_to_reject):
         # Get the sat
         sat_to_reject = min(sats_elevation, key=sats_elevation.get)
@@ -123,6 +128,7 @@ def reject_sats_lower_elev(Conf, PreproObsInfo, n_sats_to_reject):
         set_sat_valid(sat_to_reject, False, REJECTION_CAUSE['NCHANNELS_GPS'], PreproObsInfo)
 
         del sats_elevation[sat_to_reject]
+
 
 def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
     # Purpose: preprocess GNSS raw measurements from OBS file
@@ -167,12 +173,13 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
     #         PreproObsInfo["G01"]["C1"]
 
     # Initialize output
-    delta_t = 1
-    gap_counter = {}
-    rest_hatch_filter = {}
-
     PreproObsInfo = OrderedDict({})
     init_output(ObsInfo, PreproObsInfo)
+
+    # Gap detection
+    delta_t = 0.  # The gap between a satellite measurement and the previous one available
+    gap_vs_prn = {get_sat_label(int(Sat[ObsIdx["PRN"]])): 0. for Sat in ObsInfo if Sat[ObsIdx["CONST"]] == "G"} # Container to store the delta_t for all satellites
+    reset_hatch_filter_vs_prn = {get_sat_label(int(Sat[ObsIdx["PRN"]])): False for Sat in ObsInfo if Sat[ObsIdx["CONST"]] == "G"} # Container to store the delta_t for all satellites
 
     # Limit the satellites to the Number of Channels
     # [T2.0 CHANNELS][PETRUS-PPVE-REQ-010]
@@ -217,11 +224,18 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
                 set_sat_valid(sat_label, False, REJECTION_CAUSE['MAX_PSR_OUTRNG'], PreproObsInfo)
 
         # [T2.4 GAPS][PETRUS-PPVE-REQ-090 FUN]
-        if delta_t > Conf['SAMPLING_RATE']:
-            gap_counter[prn] = delta_t
+        current_epoch_is_visible = PreproObsInfo[sat_label]['RejectionCause'] != REJECTION_CAUSE['MASKANGLE']
+        prev_epoch_was_visible = PrevPreproObsInfo[sat_label]['PrevRej'] != REJECTION_CAUSE['MASKANGLE']
 
-            if gap_counter[prn] > Conf['HATCH_GAP_TH']:
-                rest_hatch_filter[prn] = True
+        if current_epoch_is_visible and prev_epoch_was_visible:
+            delta_t = PreproObsInfo[sat_label]['Sod'] - PrevPreproObsInfo[sat_label]['PrevEpoch']
+            if delta_t > Conf['SAMPLING_RATE']:
+                gap_vs_prn[sat_label] = delta_t
+
+                if gap_vs_prn[sat_label] > Conf['HATCH_GAP_TH']:
+                    if TESTING:
+                        print('[TESTING][runPreProcMeas]' + ' epoch' + ObsInfo[0][0] + ' Satellite ' + sat_label + ' Hatch filter reset (gap=' + "%.2f" % delta_t + ')')
+                    reset_hatch_filter_vs_prn[sat_label] = 1
 
     # Save current epoch for next iteration
     update_previous_meas(PreproObsInfo, PrevPreproObsInfo)
@@ -251,16 +265,14 @@ def update_previous_meas(PreproObsInfo, PrevPreproObsInfo):
         # CS detection stuff...
         pass
 
-        # Data gap detection & Smoothing
-        PrevPreproObsInfo[prn]['PrevEpoch'] = PreproObsInfo[prn]['Sod']
-        PrevPreproObsInfo[prn]['PrevL1'] = PreproObsInfo[prn]['L1']
+        # Data gap detection & Smoothing ()
+        if PreproObsInfo[prn]['RejectionCause'] != REJECTION_CAUSE['MASKANGLE']:
+        # if True:
+            PrevPreproObsInfo[prn]['PrevEpoch'] = PreproObsInfo[prn]['Sod']
+            PrevPreproObsInfo[prn]['PrevL1'] = PreproObsInfo[prn]['L1']
 
         # Other stuff...
         PrevPreproObsInfo[prn]['PrevRej'] = PreproObsInfo[prn]['RejectionCause']
-
-
-
-
 
 ########################################################################
 # END OF PREPROCESSING FUNCTIONS MODULE
