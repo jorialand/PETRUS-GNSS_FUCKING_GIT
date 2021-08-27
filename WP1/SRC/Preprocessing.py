@@ -166,8 +166,11 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
     #         Preprocessed observations for current epoch per sat
     #         PreproObsInfo["G01"]["C1"]
 
-
     # Initialize output
+    delta_t = 1
+    gap_counter = {}
+    rest_hatch_filter = {}
+
     PreproObsInfo = OrderedDict({})
     init_output(ObsInfo, PreproObsInfo)
 
@@ -213,8 +216,49 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
             if PreproObsInfo[sat_label]["C1"] > PSR_threshold:
                 set_sat_valid(sat_label, False, REJECTION_CAUSE['MAX_PSR_OUTRNG'], PreproObsInfo)
 
+        # [T2.4 GAPS][PETRUS-PPVE-REQ-090 FUN]
+        if delta_t > Conf['SAMPLING_RATE']:
+            gap_counter[prn] = delta_t
+
+            if gap_counter[prn] > Conf['HATCH_GAP_TH']:
+                rest_hatch_filter[prn] = True
+
+    # Save current epoch for next iteration
+    update_previous_meas(PreproObsInfo, PrevPreproObsInfo)
 
     return PreproObsInfo
+
+
+def update_previous_meas(PreproObsInfo, PrevPreproObsInfo):
+    """
+    Updates PrevPreproObsInfo with current PreproObsInfo state.
+
+    :param PreproObsInfo:
+    :param PrevPreproObsInfo:
+    :return:
+    """
+    for prn in PreproObsInfo:
+        # Update carrier phase in L1
+        PrevPreproObsInfo[prn]['L1_n_3'] = PrevPreproObsInfo[prn]['L1_n_2']
+        PrevPreproObsInfo[prn]['L1_n_2'] = PrevPreproObsInfo[prn]['L1_n_1']
+        PrevPreproObsInfo[prn]['L1_n_1'] = PreproObsInfo[prn]['L1']
+
+        # Update epoch
+        PrevPreproObsInfo[prn]['t_n_3'] = PrevPreproObsInfo[prn]['t_n_2']
+        PrevPreproObsInfo[prn]['t_n_2'] = PrevPreproObsInfo[prn]['t_n_1']
+        PrevPreproObsInfo[prn]['t_n_1'] = PreproObsInfo[prn]['Sod']
+
+        # CS detection stuff...
+        pass
+
+        # Data gap detection & Smoothing
+        PrevPreproObsInfo[prn]['PrevEpoch'] = PreproObsInfo[prn]['Sod']
+        PrevPreproObsInfo[prn]['PrevL1'] = PreproObsInfo[prn]['L1']
+
+        # Other stuff...
+        PrevPreproObsInfo[prn]['PrevRej'] = PreproObsInfo[prn]['RejectionCause']
+
+
 
 
 
