@@ -290,7 +290,7 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
             continue
         if not PreproObsInfo[sat_label]['ValidL1']:
             continue
-        # ---- From here, only sats within max channels number
+        # ---- From here, only sats within max channels number.
         # ------------------------------------------------------------------------------
 
         # Reject satellites whose Elevation is lower than the Masking Angle
