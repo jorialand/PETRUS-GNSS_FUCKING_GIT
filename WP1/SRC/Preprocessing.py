@@ -39,29 +39,47 @@ import numpy as np
 # Preprocessing internal functions
 # -----------------------------------------------------------------------
 
-def detect_cycle_slip(meas_CS, cs_threshold):
+def check_CS_activated(Conf):
+    return Conf['MIN_NCS_TH'][0] == 1
+
+def check_PSR_activated(Conf):
+    return Conf["MAX_PSR_OUTRNG"][0]
+
+def check_SNR_activated(Conf):
+    return Conf["MIN_CNR"][0] == 1
+
+def detect_cycle_slip(meas_CS, cs_threshold, meth='TOD'):
+    """
+    Methods available:
+        - 'TOD': Third Order Difference algorithm
+    :param meas_CS: measurements used for cycle slip detection
+    :param cs_threshold:
+    :return:
+    """
+    # Checks
+    if not all([meas_CS['t_n_1'], meas_CS['t_n_2'], meas_CS['t_n_3']]):
+        return False
+
     # Previous measurements instants
     t1 = meas_CS['t_n_0'] - meas_CS['t_n_1']
     t2 = meas_CS['t_n_1'] - meas_CS['t_n_2']
     t3 = meas_CS['t_n_2'] - meas_CS['t_n_3']
 
     # Residuals equation factors
-    try:
-        R1 = float(((t1+t2) * (t1+t2+t3)) / (t2*(t2+t3)))
-        R2 = float((-t1*(t1+t2+t3)) / (t2*t3))
-        R3 = float((t1*(t1+t2)) / (t2+t3)*t3)
-    except ZeroDivisionError:
-        return False
+    # try:
+    R1 = float((t1 + t2) * (t1 + t2 + t3)) / (t2 * (t2 + t3))
+    R2 = float(-t1 * (t1 + t2 + t3)) / (t2 * t3)
+    R3 = float(t1 * (t1 + t2)) / ((t2 + t3) * t3)
+    # except ZeroDivisionError:
+    #     # First iterations, may end up with t1, t2, t3 == 0
+    #     return False
 
     # Compute TOD residuals
-    # TOD = meas_CS['L1'] - 3*meas_CS['L1_n_1'] + 3*meas_CS['L1_n_2'] - meas_CS['L1_n_3']
-    CS_residual = abs(meas_CS['L1'] - R1*meas_CS['L1_n_1'] - R2*meas_CS['L1_n_2'] - R3*meas_CS['L1_n_3'])
+    CS_residual = abs(meas_CS['L1'] - R1 * meas_CS['L1_n_1'] - R2 * meas_CS['L1_n_2']  - R3 * meas_CS['L1_n_3'])
 
-    # if CS_residual > cs_threshold:
-    #     stop = True
     return CS_residual > cs_threshold
 
-def get_meas_CS(PreproObsInfo, PrevPreproObsInfo, sat_label):
+def get_CS_meas(PreproObsInfo, PrevPreproObsInfo, sat_label):
     meas_CS = {}
 
     # L1
@@ -77,11 +95,23 @@ def get_meas_CS(PreproObsInfo, PrevPreproObsInfo, sat_label):
     meas_CS['t_n_3'] = PrevPreproObsInfo[sat_label]['t_n_3']
 
     return meas_CS
+
+def get_CS_threshold(Conf):
+    return float(Conf['MIN_NCS_TH'][2])
+
+def get_CS_tolerance(Conf):
+    return float(Conf['MIN_NCS_TH'][1])
+
+def get_PSR_threshold(Conf):
+    return float(Conf["MAX_PSR_OUTRNG"][1])
+
+def get_SNR_threshold(Conf):
+    return float(Conf["MIN_CNR"][1])
+
 def init_output(ObsInfo, PreproObsInfo):
     """
     Fills PreproObsInfo from ObsInfo data.
 
-    # TODO TESTING init_output: I should get a dummy ObsInfo data, and check that PreproObsInfo output is as expected.
     :param ObsInfo:
     :param PreproObsInfo:
     :return:
@@ -131,7 +161,7 @@ def init_output(ObsInfo, PreproObsInfo):
         SatPreproObsInfo["Elevation"] = float(SatObs[ObsIdx["ELEV"]])
         SatPreproObsInfo["Azimuth"] = float(SatObs[ObsIdx["AZIM"]])
         SatPreproObsInfo["C1"] = float(SatObs[ObsIdx["C1"]])
-        # TODO WHAT IS P1¿?
+        # WHAT IS P1¿? TODO
         SatPreproObsInfo["L1"] = float(SatObs[ObsIdx["L1"]])
         SatPreproObsInfo["L1Meters"] = Const.GPS_L1_WAVE * float(SatObs[ObsIdx["L1"]])
         SatPreproObsInfo["S1"] = float(SatObs[ObsIdx["S1"]])
@@ -141,6 +171,9 @@ def init_output(ObsInfo, PreproObsInfo):
 
         # Prepare output for the satellite
         PreproObsInfo[SatLabel] = SatPreproObsInfo
+
+def max_consecutive_CS(PrevPreproObsInfo, sat_label, Conf):
+    return sum(PrevPreproObsInfo[sat_label]['CsBuff']) == get_CS_threshold(Conf)
 
 def reject_sats_lower_elev(Conf, PreproObsInfo, n_sats_to_reject):
     """
@@ -165,6 +198,17 @@ def reject_sats_lower_elev(Conf, PreproObsInfo, n_sats_to_reject):
         set_sat_valid(sat_to_reject, False, REJECTION_CAUSE['NCHANNELS_GPS'], PreproObsInfo)
 
         del sats_elevation[sat_to_reject]
+
+def reset_CS_meas(PreproObsInfo, PrevPreproObsInfo, sat_label):
+    # L1
+    PrevPreproObsInfo[sat_label]['L1_n_1'] = PreproObsInfo[sat_label]['L1']
+    PrevPreproObsInfo[sat_label]['L1_n_2'] = 0.
+    PrevPreproObsInfo[sat_label]['L1_n_3'] = 0.
+
+    # Epoch
+    PrevPreproObsInfo[sat_label]['t_n_1'] = PreproObsInfo[sat_label]['Sod']
+    PrevPreproObsInfo[sat_label]['t_n_2'] = 0.
+    PrevPreproObsInfo[sat_label]['t_n_3'] = 0.
 
 def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
     # Purpose: preprocess GNSS raw measurements from OBS file
@@ -212,10 +256,22 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
     PreproObsInfo = OrderedDict({})
     init_output(ObsInfo, PreproObsInfo)
 
-    # Gap detection
-    delta_t = 0.  # The gap between a satellite measurement and the previous one available
-    gap_vs_prn = {get_sat_label(int(Sat[ObsIdx["PRN"]])): 0. for Sat in ObsInfo if Sat[ObsIdx["CONST"]] == "G"} # Container to store the delta_t for all satellites
-    reset_hatch_filter_vs_prn = {get_sat_label(int(Sat[ObsIdx["PRN"]])): False for Sat in ObsInfo if Sat[ObsIdx["CONST"]] == "G"} # Container to store the delta_t for all satellites
+    epoch = int(ObsInfo[0][0])
+    # Print epoch (if activated)
+    if TESTING and False:
+        if epoch % 3600 == 0:
+            print('[TESTING][runPreProcMeas]' + ' epoch' + str(epoch))
+    # Limit simulation time (if activated)
+    limit_time = 7200
+    if TESTING and False:
+        if epoch > limit_time:
+            print('[TESTING][runPreProcMeas]' + ' SIMULATION TIME LIMIT REACHED (' + str(limit_time) + ')')
+            exit('[TESTING][runPreProcMeas]' + ' SIMULATION TIME LIMIT REACHED (' + str(limit_time) + ')')
+
+    # Globals
+    reset_hatch_filter_vs_prn = \
+        {get_sat_label(int(Sat[ObsIdx["PRN"]])): False for Sat in ObsInfo if Sat[ObsIdx["CONST"]] == "G"}  # Container
+    # to store the delta_t for all satellites
 
     # Limit the satellites to the Number of Channels
     # [T2.0 CHANNELS][PETRUS-PPVE-REQ-010]
@@ -227,18 +283,25 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
     # Loop over all satellites
     for prn in range(1, Const.MAX_NUM_SATS_CONSTEL + 1):
         sat_label = get_sat_label(prn)
+        # reset_hatch_filter_vs_prn[sat_label] = 0
 
         # Checks
         if not sat_label in PreproObsInfo:
             continue
         if not PreproObsInfo[sat_label]['ValidL1']:
             continue
+        # ---- From here, only sats within max channels number
+        # ------------------------------------------------------------------------------
 
-        # Reject satellites whose Elevation is lower than the Masking Angle.
+        # Reject satellites whose Elevation is lower than the Masking Angle
         # [T2.1 ELEVATION][NO REQUIREMENT ASSOCIATED]
         # ------------------------------------------------------------------------------
-        if PreproObsInfo[sat_label]["Elevation"] < Conf["RCVR_MASK"]:
+        if PreproObsInfo[sat_label]["Elevation"] < Rcvr[RcvrIdx['MASK']]:
             set_sat_valid(sat_label, False, REJECTION_CAUSE['MASKANGLE'], PreproObsInfo)
+            continue
+        # ---- From here, only sats within max channels number
+        # ---- & min mask angle
+        # ------------------------------------------------------------------------------
 
         # Measurement quality monitoring (SNR, PSR OUTRNG)
         # ------------------------------------------------------------------------------
@@ -246,96 +309,169 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
         # Check Signal To Noise Ratio in front of Minimum by configuration (if activated)
         # [T2.2 SNR CHECK][PETRUS-PPVE-REQ-020]
         # ------------------------------------------------------------------------------
-        check_SNR, SNR_threshold = Conf["MIN_CNR"][0], Conf["MIN_CNR"][1]
-        if check_SNR:
-            if PreproObsInfo[sat_label]["S1"] < SNR_threshold:
+        if check_SNR_activated(Conf):
+            if PreproObsInfo[sat_label]["S1"] < get_SNR_threshold(Conf):
                 set_sat_valid(sat_label, False, REJECTION_CAUSE['MIN_CNR'], PreproObsInfo)
+                continue
+        # ---- From here, only sats within max channels number
+        # ---- & min mask angle
+        # ---- & min SNR
+        # ------------------------------------------------------------------------------
 
         # Check Pseudo-ranges Out-of-Range in front of Maximum by configuration (if activated)
         # [T2.3 OUT-OF-RANGE][NO REQUIREMENT ASSOCIATED]
         # ------------------------------------------------------------------------------
-        check_PSR, PSR_threshold = Conf["MAX_PSR_OUTRNG"][0], Conf["MAX_PSR_OUTRNG"][1]
-        if check_PSR:
-            if PreproObsInfo[sat_label]["C1"] > PSR_threshold:
+
+        if check_PSR_activated(Conf):
+            if PreproObsInfo[sat_label]["C1"] > get_PSR_threshold(Conf):
                 set_sat_valid(sat_label, False, REJECTION_CAUSE['MAX_PSR_OUTRNG'], PreproObsInfo)
+                continue
+        # ---- From here, only sats within max channels number
+        # ---- & min mask angle
+        # ---- & min SNR
+        # ---- & max PSR
+        # ------------------------------------------------------------------------------
 
-        # Check GAPS
-        # [T2.4 GAPS][PETRUS-PPVE-REQ-090]
-        current_epoch_is_visible = PreproObsInfo[sat_label]['RejectionCause'] != REJECTION_CAUSE['MASKANGLE']
-        prev_epoch_was_visible = PrevPreproObsInfo[sat_label]['PrevRej'] != REJECTION_CAUSE['MASKANGLE']
+        # # Check GAPS
+        # # [T2.4 GAPS][PETRUS-PPVE-REQ-090]
+        # NOTICE The delta_t should only be calculated with satellites above mask angle (aka visible sats)
+        # NOTICE The non visibility period gaps [sat visible] - [sat not visible] - (gap) - [sat visible] are not
+        #        considered as data gaps
 
-        if current_epoch_is_visible and prev_epoch_was_visible:
+        if not PrevPreproObsInfo[sat_label]['PrevEpoch']:
+            # First satellite occurrence
+            delta_t = Conf['SAMPLING_RATE']
+        else:
             delta_t = PreproObsInfo[sat_label]['Sod'] - PrevPreproObsInfo[sat_label]['PrevEpoch']
-            if delta_t > Conf['SAMPLING_RATE']:
-                gap_vs_prn[sat_label] = delta_t
 
-                # Reset Hatch filter
-                if gap_vs_prn[sat_label] > Conf['HATCH_GAP_TH']:
-                    if TESTING:
-                        print('[TESTING][runPreProcMeas]' + ' epoch' + ObsInfo[0][0] + ' Satellite ' + sat_label + ' Hatch filter reset (gap=' + "%.2f" % delta_t + ')')
-                    reset_hatch_filter_vs_prn[sat_label] = True
+        if delta_t > Conf['SAMPLING_RATE']:
+            if delta_t > Conf['HATCH_GAP_TH']:
+                reset_hatch_filter_vs_prn[sat_label] = True
 
-        # Check CYCLE SLIPS, with Third Order Difference algorithm (if activated)
+                # Non-visibility periods are not gaps
+                if PrevPreproObsInfo[sat_label]['PrevRej'] != REJECTION_CAUSE['MASKANGLE']:
+                    set_sat_valid(sat_label, False, REJECTION_CAUSE['DATA_GAP'], PreproObsInfo)
+
+                    if TESTING and False:
+                        print('[TESTING][runPreProcMeas]' + ' epoch' + ObsInfo[0][0] + ' Satellite ' + sat_label + \
+                              ' Hatch filter reset (gap=' + "%.2f" % delta_t + ')')
+        # ---- From here, only sats within max channels number
+        # ---- & min mask angle
+        # ---- & min SNR
+        # ---- & max PSR
+        # ---- & GAPS clean
+        # ------------------------------------------------------------------------------
+
+        # Check CYCLE SLIPS (if activated)
         # [T2.5 CYCLE SLIPS][PETRUS-PPVE-REQ-080]
         # ------------------------------------------------------------------------------
 
-        CS_flag = detect_cycle_slip(get_meas_CS(PreproObsInfo, PrevPreproObsInfo, sat_label),
-                                    Conf['MIN_NCS_TH'][1])
+        if check_CS_activated(Conf):
+            if not reset_hatch_filter_vs_prn[sat_label]:
+                CS_flag = detect_cycle_slip(get_CS_meas(PreproObsInfo, PrevPreproObsInfo, sat_label),
+                                            get_CS_tolerance(Conf), meth='TOD')
+                if CS_flag:
+                    set_sat_valid(sat_label, False, REJECTION_CAUSE['CYCLE_SLIP'], PreproObsInfo)
 
-        if CS_flag:
-            # Measurement not valid
-            set_sat_valid(sat_label, False, REJECTION_CAUSE['CYCLE_SLIP'], PreproObsInfo)
+                    if TESTING and False:
+                        print('[TESTING][runPreProcMeas]' + ' epoch' + ObsInfo[0][0] + \
+                              ' Satellite ' + sat_label + '(CS)')
 
-            # CS buffer
-            update_CS_buffer(PrevPreproObsInfo[sat_label]['CsBuff'])
-            # Reset Hatch filter
-            if sum(PrevPreproObsInfo[sat_label]['CsBuff']) == Conf['MIN_NCS_TH'][2]:
-                if TESTING:
-                    print('[TESTING][runPreProcMeas]' + ' epoch' + ObsInfo[0][0] + \
-                          ' Satellite ' + sat_label + ' Hatch filter reset (CS)')
-                reset_hatch_filter_vs_prn[sat_label] = True
+                CSBuff_update(CS_flag, PrevPreproObsInfo, sat_label)
 
-    # Save current epoch for next iteration
-    update_previous_meas(PreproObsInfo, PrevPreproObsInfo)
+                # Reset Hatch filter
+                if max_consecutive_CS(PrevPreproObsInfo, sat_label, Conf):
+                    reset_hatch_filter_vs_prn[sat_label] = True
+
+                    if TESTING and True:
+                        print('[TESTING][runPreProcMeas]' + ' epoch' + ObsInfo[0][0] + \
+                              ' Satellite ' + sat_label + ' Hatch filter reset (CS)')
+        # ---- From here, only sats within max channels number
+        # ---- & min mask angle
+        # ---- & min SNR
+        # ---- & max PSR
+        # ---- & GAPS clean
+        # ---- & CS clean
+        # ------------------------------------------------------------------------------
+
+    # Save VALID current epoch meas for next epoch
+    Ksmooth = None
+    update_previous_meas(PreproObsInfo, PrevPreproObsInfo,
+                         reset_hatch_filter_vs_prn, Conf, Ksmooth)
 
     return PreproObsInfo
 
-def update_CS_buffer(CS_buffer):
-    stop = True
-    for i in range(len(CS_buffer)):
-        if CS_buffer[i] == 1:
-            continue
-        if CS_buffer[i] == 0:
-            CS_buffer[i] = 1
-            break
+def CSBuff_reset(PrevPreproObsInfo, sat_label, Conf):
+    PrevPreproObsInfo[sat_label]["CsBuff"] = [0] * int(Conf["MIN_NCS_TH"][CSNEPOCHS])
 
-def update_previous_meas(PreproObsInfo, PrevPreproObsInfo):
+def CSBuff_update(CS_flag, PrevPreproObsInfo, sat_label):
+    if CS_flag:
+        CSBuff_notify_CS_event(PrevPreproObsInfo, sat_label)
+    else:
+        CSBuff_notify_no_CS_event(PrevPreproObsInfo, sat_label)
+    CSBuff_move_idx(PrevPreproObsInfo, sat_label)
+
+def CSBuff_move_idx(PrevPreproObsInfo, sat_label):
+    PrevPreproObsInfo[sat_label]["CsIdx"] += 1
+    PrevPreproObsInfo[sat_label]["CsIdx"] %= len(PrevPreproObsInfo[sat_label]["CsBuff"])
+
+def CSBuff_notify_no_CS_event(PrevPreproObsInfo, sat_label):
+    PrevPreproObsInfo[sat_label]["CsBuff"][PrevPreproObsInfo[sat_label]["CsIdx"]] = 0
+
+def CSBuff_notify_CS_event(PrevPreproObsInfo, sat_label):
+    PrevPreproObsInfo[sat_label]["CsBuff"][PrevPreproObsInfo[sat_label]["CsIdx"]] = 1
+
+def update_CS_buffer(PrevPreproObsInfo, sat_label, CS_flag):
+    # Update CS Buffer, depending on Cycle Slip flag
+    if CS_flag:
+        PrevPreproObsInfo[sat_label]["CsBuff"][PrevPreproObsInfo[sat_label]["CsIdx"]] = 1
+    else:
+        PrevPreproObsInfo[sat_label]["CsBuff"][PrevPreproObsInfo[sat_label]["CsIdx"]] = 0
+
+    # Increment CS Buffer current index circular counter
+    PrevPreproObsInfo[sat_label]["CsIdx"] += 1
+    PrevPreproObsInfo[sat_label]["CsIdx"] %= len(PrevPreproObsInfo[sat_label]["CsBuff"])
+
+def update_previous_meas(PreproObsInfo, PrevPreproObsInfo, reset_hatch_filter_vs_prn, Conf, Ksmooth):
     """
-    Updates PrevPreproObsInfo with current PreproObsInfo state.
+    Updates PrevPreproObsInfo with current PreproObsInfo state (only VALID sats).
 
     :param PreproObsInfo:
     :param PrevPreproObsInfo:
     :return:
     """
-    for prn in PreproObsInfo:
-        # CS detection stuff
-        if PreproObsInfo[prn]['ValidL1']:
-            # Update carrier phase in L1
-            PrevPreproObsInfo[prn]['L1_n_3'] = PrevPreproObsInfo[prn]['L1_n_2']
-            PrevPreproObsInfo[prn]['L1_n_2'] = PrevPreproObsInfo[prn]['L1_n_1']
-            PrevPreproObsInfo[prn]['L1_n_1'] = PreproObsInfo[prn]['L1']
-            # Update epoch
-            PrevPreproObsInfo[prn]['t_n_3'] = PrevPreproObsInfo[prn]['t_n_2']
-            PrevPreproObsInfo[prn]['t_n_2'] = PrevPreproObsInfo[prn]['t_n_1']
-            PrevPreproObsInfo[prn]['t_n_1'] = PreproObsInfo[prn]['Sod']
+    for sat_label in PreproObsInfo:
+        PrevPreproObsInfo[sat_label]['PrevRej'] = PreproObsInfo[sat_label]['RejectionCause']
 
         # Data gap detection & Smoothing
-        if PreproObsInfo[prn]['RejectionCause'] != REJECTION_CAUSE['MASKANGLE']:
-            PrevPreproObsInfo[prn]['PrevEpoch'] = PreproObsInfo[prn]['Sod']
-            PrevPreproObsInfo[prn]['PrevL1'] = PreproObsInfo[prn]['L1']
+        # Only valid measurements or when resetting the Hatch filter account for previous valid epoch
+        if PreproObsInfo[sat_label]['ValidL1'] or reset_hatch_filter_vs_prn[sat_label]:
+            PrevPreproObsInfo[sat_label]['PrevEpoch'] = PreproObsInfo[sat_label]['Sod']
 
-        # Other stuff...
-        PrevPreproObsInfo[prn]['PrevRej'] = PreproObsInfo[prn]['RejectionCause']
+        # CS detection
+        if PreproObsInfo[sat_label]['ValidL1']:
+            # Update carrier phase in L1
+            PrevPreproObsInfo[sat_label]['L1_n_3'] = PrevPreproObsInfo[sat_label]['L1_n_2']
+            PrevPreproObsInfo[sat_label]['L1_n_2'] = PrevPreproObsInfo[sat_label]['L1_n_1']
+            PrevPreproObsInfo[sat_label]['L1_n_1'] = PreproObsInfo[sat_label]['L1']
+            # Update epoch
+            PrevPreproObsInfo[sat_label]['t_n_3'] = PrevPreproObsInfo[sat_label]['t_n_2']
+            PrevPreproObsInfo[sat_label]['t_n_2'] = PrevPreproObsInfo[sat_label]['t_n_1']
+            PrevPreproObsInfo[sat_label]['t_n_1'] = PreproObsInfo[sat_label]['Sod']
+
+        # TAL
+        if reset_hatch_filter_vs_prn[sat_label]:
+            reset_CS_meas(PreproObsInfo, PrevPreproObsInfo, sat_label)
+            CSBuff_reset(PrevPreproObsInfo, sat_label, Conf)
+
+        # Valid measurements haven't reset the Hatch filter
+        if PreproObsInfo[sat_label]['ValidL1']:
+            PrevPreproObsInfo[sat_label]['ResetHatchFilter'] = 0
+
+        # Hatch filter
+        PrevPreproObsInfo[sat_label]["PrevL1"] = PreproObsInfo[sat_label]["L1Meters"]
+        PrevPreproObsInfo[sat_label]["Ksmooth"] = Ksmooth
+        PrevPreproObsInfo[sat_label]["PrevSmoothC1"] = PreproObsInfo[sat_label]["SmoothC1"]
 
 ########################################################################
 # END OF PREPROCESSING FUNCTIONS MODULE

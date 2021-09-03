@@ -100,7 +100,7 @@ def init_prev_output(PrevPreproObsInfo):
             "CsIdx": 0,  # Index of CS detector buffer
             "ResetHatchFilter": 1,  # Flag to reset Hatch filter
             "Ksmooth": 0,  # Hatch filter K
-            "PrevEpoch": 86400,  # Previous SoD
+            "PrevEpoch": 0.0,  # Previous SoD
             "PrevL1": 0.0,  # Previous L1
             "PrevSmoothC1": 0.0,  # Previous Smoothed C1
             "PrevRangeRateL1": 0.0,  # Previous Code Rate
