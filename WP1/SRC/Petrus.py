@@ -98,7 +98,8 @@ def init_prev_output(PrevPreproObsInfo):
             "CsBuff": [0] * \
                       int(Conf["MIN_NCS_TH"][CSNEPOCHS]),  # Number of consecutive epochs for CS
             "CsIdx": 0,  # Index of CS detector buffer
-            "ResetHatchFilter": 1,  # Flag to reset Hatch filter
+            "gap_counter": 0.,
+            "reset_hatch_filter": False,  # Flag to reset Hatch filter
             "Ksmooth": 0,  # Hatch filter K
             "PrevEpoch": 0.0,  # Previous SoD
             "PrevL1": 0.0,  # Previous L1
@@ -108,7 +109,8 @@ def init_prev_output(PrevPreproObsInfo):
             "PrevGeomFree": 0.0,  # Previous Geometry-Free Observable
             "PrevGeomFreeEpoch": 0.0,  # Previous Geometry-Free Observable
             "PrevRej": 0,  # Previous Rejection flag
-            # ...
+            "PrevRangeRateL1": None,
+            "PrevPhaseRateL1": None,
         }
 
 for Rcvr in RcvrInfo.keys():
