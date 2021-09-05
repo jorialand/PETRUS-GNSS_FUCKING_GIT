@@ -51,7 +51,7 @@ def check_SNR_activated(Conf):
     return Conf["MIN_CNR"][0] == 1
 
 def compute_phase_rate(PreproObsInfo, PrevPreproObsInfo, sat_label, delta_t):
-    return Const.GPS_L1_WAVE * (PreproObsInfo[sat_label]['L1'] - PrevPreproObsInfo[sat_label]['PrevL1'] ) / delta_t
+    return Const.GPS_L1_WAVE * (PreproObsInfo[sat_label]['L1'] - PrevPreproObsInfo[sat_label]['PrevL1']) / delta_t
 
 def detect_cycle_slip(meas_CS, cs_threshold, meth='TOD'):
     """
@@ -319,11 +319,11 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
         if epoch > limit_time:
             print('[TESTING][runPreProcMeas]' + ' SIMULATION TIME LIMIT REACHED (' + str(limit_time) + ')')
             exit('[TESTING][runPreProcMeas]' + ' SIMULATION TIME LIMIT REACHED (' + str(limit_time) + ')')
-    TESTING_PRINT = {'nchannels': True,
-                     'maskangle': False,
-                     'snr': False,
-                     'psr': True,
-                     'gap': True,
+    TESTING_PRINT = {'nchannels': True,     # Tested, none
+                     'maskangle': False,    # Tested, many
+                     'snr': False,          # Tested, some
+                     'psr': True,           # Tested, none
+                     'gap': True,           #
                      'CS': True,
                      'reset_hatch_filter': True}
     # Globals
@@ -385,15 +385,19 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
         # Check Pseudo-ranges Out-of-Range in front of Maximum by configuration (if activated)
         # [T2.3 OUT-OF-RANGE][NO REQUIREMENT ASSOCIATED]
         # ------------------------------------------------------------------------------
-
-        # if check_PSR_activated(Conf):
-        #     if PreproObsInfo[sat_label]["C1"] > get_PSR_threshold(Conf):
-        #         set_sat_valid(sat_label, False, REJECTION_CAUSE['MAX_PSR_OUTRNG'], PreproObsInfo)
-        #         continue
+        if check_PSR_activated(Conf):
+            if PreproObs["C1"] > get_PSR_threshold(Conf):
+                set_sat_valid(PreproObs, False, REJECTION_CAUSE['MAX_PSR_OUTRNG'])
+                # PrevPreproObsInfo[sat_label]['PrevRej'] = REJECTION_CAUSE['MAX_PSR_OUTRNG'] # TODO PrevRej MAX_PSR_OUTRNG¿?
+                if TESTING and TESTING_PRINT['psr']:
+                    print('[TESTING][runPreProcMeas]' + ' epoch' + str(epoch) +
+                          ' Satellite ' + sat_label + ' Rejected (MAX_PSR)')
+                continue
         # ---- From here, only sats within max channels number
         # ---- & min mask angle
         # ---- & min SNR
         # ---- & max PSR
+        # ---- TESTED WITH ./testing_psr.sh
         # ------------------------------------------------------------------------------
 
         # # Check GAPS
