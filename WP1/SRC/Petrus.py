@@ -100,17 +100,15 @@ def init_prev_output(PrevPreproObsInfo):
             "CsIdx": 0,  # Index of CS detector buffer
             "gap_counter": 0.,
             "reset_hatch_filter": False,  # Flag to reset Hatch filter
-            "Ksmooth": 0,  # Hatch filter K
+            "k_smooth": 0,  # Hatch filter K
             "PrevEpoch": 0.0,  # Previous SoD
             "PrevL1": 0.0,  # Previous L1
             "PrevSmoothC1": 0.0,  # Previous Smoothed C1
-            "PrevRangeRateL1": 0.0,  # Previous Code Rate
-            "PrevPhaseRateL1": 0.0,  # Previous Phase Rate
+            "PrevRangeRateL1": 0.,  # Previous Code Rate
+            "PrevPhaseRateL1": 0.,  # Previous Phase Rate
             "PrevGeomFree": 0.0,  # Previous Geometry-Free Observable
             "PrevGeomFreeEpoch": 0.0,  # Previous Geometry-Free Observable
             "PrevRej": 0,  # Previous Rejection flag
-            "PrevRangeRateL1": None,
-            "PrevPhaseRateL1": None,
         }
 
 for Rcvr in RcvrInfo.keys():
