@@ -345,11 +345,16 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
         # Reject satellites whose Elevation is lower than the Masking Angle
         # [T2.1 ELEVATION][NO REQUIREMENT ASSOCIATED]
         # ------------------------------------------------------------------------------
-        # if PreproObsInfo[sat_label]["Elevation"] < Rcvr[RcvrIdx['MASK']]:
-        #     set_sat_valid(sat_label, False, REJECTION_CAUSE['MASKANGLE'], PreproObsInfo)
-        #     continue
+        if PreproObs["Elevation"] < Rcvr[RcvrIdx['MASK']]:
+            set_sat_valid(PreproObs, False, REJECTION_CAUSE['MASKANGLE'])
+            PrevPreproObsInfo[sat_label]['PrevRej'] = REJECTION_CAUSE['MASKANGLE']
+            if TESTING and True:
+                print('[TESTING][runPreProcMeas]' + ' epoch' + str(epoch) +
+                      ' Satellite ' + sat_label + ' Rejected (MASKANGLE)')
+            continue
         # ---- From here, only sats within max channels number
         # ---- & min mask angle
+        # ---- TESTED WITH ./testing_maskangle.sh
         # ------------------------------------------------------------------------------
 
         # Measurement quality monitoring (SNR, PSR OUTRNG)
