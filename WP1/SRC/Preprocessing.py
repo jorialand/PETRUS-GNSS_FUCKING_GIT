@@ -313,14 +313,19 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
         step = epoch / 86400 * 100
         if step % 10 == 0:
             print('[TESTING][runPreProcMeas]' + ' Progress ' + '%.d' % step + '%')
-
     # Limit simulation time (if activated)
     limit_time = 7200
     if TESTING and False:
         if epoch > limit_time:
             print('[TESTING][runPreProcMeas]' + ' SIMULATION TIME LIMIT REACHED (' + str(limit_time) + ')')
             exit('[TESTING][runPreProcMeas]' + ' SIMULATION TIME LIMIT REACHED (' + str(limit_time) + ')')
-
+    TESTING_PRINT = {'nchannels': True,
+                     'maskangle': False,
+                     'snr': False,
+                     'psr': True,
+                     'gap': True,
+                     'CS': True,
+                     'reset_hatch_filter': True}
     # Globals
     pass
 
@@ -334,7 +339,7 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
         # ----------------------------------------------------------
         if PreproObs['Elevation'] < elev_cut_value_nchannels:
             set_sat_valid(PreproObs, False, REJECTION_CAUSE['NCHANNELS_GPS'])
-            if TESTING and True:
+            if TESTING and TESTING_PRINT['nchannels']:
                 print('[TESTING][runPreProcMeas]' + ' epoch' + str(epoch) +
                       ' Satellite ' + sat_label + ' Rejected (NCHANNELS_GPS)')
             continue
@@ -348,7 +353,7 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
         if PreproObs["Elevation"] < Rcvr[RcvrIdx['MASK']]:
             set_sat_valid(PreproObs, False, REJECTION_CAUSE['MASKANGLE'])
             PrevPreproObsInfo[sat_label]['PrevRej'] = REJECTION_CAUSE['MASKANGLE']
-            if TESTING and True:
+            if TESTING and TESTING_PRINT['maskangle']:
                 print('[TESTING][runPreProcMeas]' + ' epoch' + str(epoch) +
                       ' Satellite ' + sat_label + ' Rejected (MASKANGLE)')
             continue
@@ -363,13 +368,18 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
         # Check Signal To Noise Ratio in front of Minimum by configuration (if activated)
         # [T2.2 SNR CHECK][PETRUS-PPVE-REQ-020]
         # ------------------------------------------------------------------------------
-        # if check_SNR_activated(Conf):
-        #     if PreproObsInfo[sat_label]["S1"] < get_SNR_threshold(Conf):
-        #         set_sat_valid(sat_label, False, REJECTION_CAUSE['MIN_CNR'], PreproObsInfo)
-        #         continue
+        if check_SNR_activated(Conf):
+            if PreproObs["S1"] < get_SNR_threshold(Conf):
+                set_sat_valid(PreproObs, False, REJECTION_CAUSE['MIN_CNR'])
+                PrevPreproObsInfo[sat_label]['PrevRej'] = REJECTION_CAUSE['MIN_CNR']
+                if TESTING and TESTING_PRINT['snr']:
+                    print('[TESTING][runPreProcMeas]' + ' epoch' + str(epoch) +
+                          ' Satellite ' + sat_label + ' Rejected (MIN_CNR)')
+                continue
         # ---- From here, only sats within max channels number
         # ---- & min mask angle
         # ---- & min SNR
+        # ---- TESTED WITH ./testing_snr.sh
         # ------------------------------------------------------------------------------
 
         # Check Pseudo-ranges Out-of-Range in front of Maximum by configuration (if activated)
