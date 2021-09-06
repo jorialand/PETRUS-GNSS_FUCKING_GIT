@@ -209,14 +209,14 @@ def init_output(ObsInfo, PreproObsInfo):
 def max_consecutive_CS(PrevPreproObsInfo, sat_label, Conf):
     return sum(PrevPreproObsInfo[sat_label]['CsBuff']) == get_CS_threshold(Conf)
 
-def reset_CS_meas(PreproObsInfo, PrevPreproObsInfo, sat_label, hard_reset=False):
+def reset_CS_meas(PreproObs, PrevPreproObsInfo, sat_label, hard_reset=False):
     # L1
-    PrevPreproObsInfo[sat_label]['L1_n_1'] = PreproObsInfo[sat_label]['L1']
+    PrevPreproObsInfo[sat_label]['L1_n_1'] = PreproObs['L1']
     PrevPreproObsInfo[sat_label]['L1_n_2'] = 0.
     PrevPreproObsInfo[sat_label]['L1_n_3'] = 0.
 
     # Epoch
-    PrevPreproObsInfo[sat_label]['t_n_1'] = PreproObsInfo[sat_label]['Sod']
+    PrevPreproObsInfo[sat_label]['t_n_1'] = PreproObs['Sod']
     PrevPreproObsInfo[sat_label]['t_n_2'] = 0.
     PrevPreproObsInfo[sat_label]['t_n_3'] = 0.
 
@@ -243,6 +243,28 @@ def CSBuff_notify_no_CS_event(PrevPreproObsInfo, sat_label):
 
 def CSBuff_notify_CS_event(PrevPreproObsInfo, sat_label):
     PrevPreproObsInfo[sat_label]["CsBuff"][PrevPreproObsInfo[sat_label]["CsIdx"]] = 1
+
+def reset_hatch_filter(PreproObs, PrevPreproObsInfo, sat_label, Conf):
+    epoch = PreproObs['Sod']
+    # Reset gap counter
+    PrevPreproObsInfo[sat_label]['gap_counter'] = 0.
+    # Reset smoothing artifacts
+    PrevPreproObsInfo[sat_label]['k_smooth'] = 1
+    PreproObs['SmoothC1'] = PreproObs['C1']
+    PrevPreproObsInfo[sat_label]['PrevSmoothC1'] = PreproObs['SmoothC1']
+    # Reset phase measurements
+    PrevPreproObsInfo[sat_label]['PrevL1'] = PreproObs['L1']
+    PrevPreproObsInfo[sat_label]['PrevEpoch'] = epoch
+    # Reset rates
+    PrevPreproObsInfo[sat_label]['PrevRangeRateL1'] = -9999.99
+    PrevPreproObsInfo[sat_label]['PrevPhaseRateL1'] = -9999.99
+    # More smoothing artifacts
+    PrevPreproObsInfo[sat_label]['reset_hatch_filter'] = False
+    # Update smoothing status (0 means smoothing isn't done)
+    PreproObs['Status'] = 0
+    # Reset CS detection artifacts
+    reset_CS_meas(PreproObs, PrevPreproObsInfo, sat_label, hard_reset=True)
+    CSBuff_reset(PrevPreproObsInfo, sat_label, Conf)
 
 def update_CS_buffer(PrevPreproObsInfo, sat_label, CS_flag):
     # Update CS Buffer, depending on Cycle Slip flag
@@ -323,9 +345,10 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
                      'maskangle': False,    # Tested, many
                      'snr': False,          # Tested, some
                      'psr': True,           # Tested, none
-                     'gap': True,           #
+                     'reset_hatch_filter': True, # Tested, many
+                     'gap': True,           # Tested, some
                      'CS': True,
-                     'reset_hatch_filter': True}
+                     }
     # Globals
     pass
 
@@ -400,39 +423,45 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
         # ---- TESTED WITH ./testing_psr.sh
         # ------------------------------------------------------------------------------
 
-        # # Check GAPS
-        # # [T2.4 GAPS][PETRUS-PPVE-REQ-090]
+        # Check GAPS
+        # [T2.4 GAPS][PETRUS-PPVE-REQ-090]
+        # ------------------------------------------------------------------------------
         # NOTICE The delta_t should only be calculated with satellites above mask angle (aka visible sats)
         # NOTICE The non visibility period gaps [sat visible] - [sat not visible] - (gap) - [sat visible] are not
         #        considered as data gaps
+        # NOTICE First satellite occurrence doesn't account as data gap bcause delta_t<0
+        # NOTICE Resuming: first, when a data gap is detected, reset hatch filter (this includes non-visibilty periods.
+        #       Furthermore, raise the data gap detection flag (excluding sats coming from non-visible periods) (but do
+        #       not invalidate the sat, nor reject it) TODO WHY NOT INVALIDATE & REJECT DATA GAPS¿?
+        if sat_label == 'G01' and epoch == 6255:
+            stop = True
+        delta_t = epoch - PrevPreproObsInfo[sat_label]['PrevEpoch']
+        if delta_t > Conf['SAMPLING_RATE']:
+            PrevPreproObsInfo[sat_label]['gap_counter'] = delta_t
+            if PrevPreproObsInfo[sat_label]['gap_counter'] > get_hatch_gap_threshold(Conf):
+                PrevPreproObsInfo[sat_label]['reset_hatch_filter'] = True
+                PrevPreproObsInfo[sat_label]['gap_counter'] = 0
 
-        # if not PrevPreproObsInfo[sat_label]['PrevEpoch']:
-        #     # First satellite occurrence
-        #     delta_t = Conf['SAMPLING_RATE']
-        # else:
-        #     delta_t = PreproObsInfo[sat_label]['Sod'] - PrevPreproObsInfo[sat_label]['PrevEpoch']
-        #
-        # if delta_t > Conf['SAMPLING_RATE']:
-        #     PrevPreproObsInfo[sat_label]['gap_counter'] = delta_t
-        #     if delta_t > get_hatch_gap_threshold(Conf):
-        #         PrevPreproObsInfo[sat_label]['reset_hatch_filter'] = True
-        #         PrevPreproObsInfo[sat_label]['gap_counter'] = 0
-        #
-        #         # Non-visibility periods are not gaps
-        #         if PrevPreproObsInfo[sat_label]['PrevRej'] != REJECTION_CAUSE['MASKANGLE']:
-        #             set_sat_valid(sat_label, False, REJECTION_CAUSE['DATA_GAP'], PreproObsInfo)
-        #             PreproObsInfo[sat_label]["ValidL1"] = 1
-        #             if TESTING and True:
-        #                 print('[TESTING][runPreProcMeas]' + ' epoch' + ObsInfo[0][0] + ' Satellite ' + sat_label +
-        #                       ' Hatch filter reset (gap=' + "%.2f" % delta_t + ')')
-        # else:
-        #     PrevPreproObsInfo[sat_label]['gap_counter'] = 0
+                # NOTICE Non-visibility periods are not gaps. In case the previous rejection cause was bcause mask angle,
+                #        it means that the satellite has become visible after a period of non-visibility
+                if PrevPreproObsInfo[sat_label]['PrevRej'] != REJECTION_CAUSE['MASKANGLE']:
+                    set_sat_valid(PreproObs, True, REJECTION_CAUSE['DATA_GAP'])  # TODO WHY NOT INVALIDATE & REJECT DATA GAPS¿?
+                    if TESTING and TESTING_PRINT['gap']:
+                        print('[TESTING][runPreProcMeas]' + ' epoch' + str(epoch) + ' Satellite ' + sat_label +
+                              ' Rejected* (gap=' + "%.2f" % delta_t + ')')
+                else:
+                    if TESTING and TESTING_PRINT['reset_hatch_filter']:
+                        print('[TESTING][runPreProcMeas]' + ' epoch' + str(epoch) + ' Satellite ' + sat_label +
+                              ' Hatch filter reset (non-visibility gap=' + "%.2f" % delta_t + ')')
+        else:
+            PrevPreproObsInfo[sat_label]['gap_counter'] = 0
 
         # ---- From here, only sats within max channels number
         # ---- & min mask angle
         # ---- & min SNR
         # ---- & max PSR
         # ---- & GAPS clean
+        # ---- TESTED WITH ./testing_gaps.sh
         # ------------------------------------------------------------------------------
 
         # Check CYCLE SLIPS (if activated)
@@ -471,9 +500,9 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
     #     # [T2.6 SMOOTHING][PETRUS-PPVE-REQ-100]
     #     # -------------------------------------------------------------------------------
     #     # Reset Hatch filter
-    #     if PrevPreproObsInfo[sat_label]['reset_hatch_filter']:
-    #         # reset_hatch_filter(PreproObsInfo, PrevPreproObsInfo, sat_label, Conf)
-    #         continue
+        if PrevPreproObsInfo[sat_label]['reset_hatch_filter']:
+            reset_hatch_filter(PreproObs, PrevPreproObsInfo, sat_label, Conf)
+            continue
     #
     #     #  Perform the Code Carrier SMOOTHING with a Hatch Filter
     #     # -------------------------------------------------------------------------------
@@ -525,85 +554,21 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
     #
     #     # Update Measurement Smoothing Status and Hatch filter Convergence
     #     pass
-    # # Save VALID current epoch meas for next epoch
-    # update_previous_meas(PreproObsInfo, PrevPreproObsInfo, Conf)
+        # Save VALID current epoch meas for next epoch
+        update_previous_meas(PreproObs, PrevPreproObsInfo, sat_label)
+
 
     return PreproObsInfo
 
 # 2nd MOST RELEVANT FUNCTION HERE
-def update_previous_meas(PreproObsInfo, PrevPreproObsInfo, Conf):
-    """
-    Updates PrevPreproObsInfo with current PreproObsInfo state (only VALID sats).
-
-    ---- TODO ---- The order of operations is a mess, pending review
-    :param Conf:
-    :param PreproObsInfo:
-    :param PrevPreproObsInfo:
-    :return:
-    """
-    for sat_label in PreproObsInfo:
-
-        if TESTING and True and ((sat_label == 'G20' and PreproObsInfo[sat_label]['RejectionCause'] == 7) or
-                                 (sat_label == 'G17' and PreproObsInfo[sat_label]['RejectionCause'] == 7) or
-                                 (sat_label == 'G19' and PreproObsInfo[sat_label]['RejectionCause'] == 7) or
-                                 (sat_label == 'G10' and PreproObsInfo[sat_label]['RejectionCause'] == 7)):
-            stop = True
-
-        if TESTING and True and (sat_label == 'G28' and PreproObsInfo[sat_label]['Sod'] == 39961):
-            stop = True
-
-        # Reset Hatch filter
-        if PrevPreproObsInfo[sat_label]['reset_hatch_filter']:
-            PrevPreproObsInfo[sat_label]['gap_counter'] = 0.
-
-            # Reset smoothing artifacts
-            PrevPreproObsInfo[sat_label]['k_smooth'] = 1
-            PreproObsInfo[sat_label]['SmoothC1'] = PreproObsInfo[sat_label]['C1']
-            PrevPreproObsInfo[sat_label]['PrevSmoothC1'] = PreproObsInfo[sat_label]['SmoothC1']
-            # Reset phase measurements
-            PrevPreproObsInfo[sat_label]['PrevL1'] = PreproObsInfo[sat_label]['L1']
-            PrevPreproObsInfo[sat_label]['PrevEpoch'] = PreproObsInfo[sat_label]['Sod']
-            # Reset rates
-            PrevPreproObsInfo[sat_label]['PrevRangeRateL1'] = -9999.99
-            PrevPreproObsInfo[sat_label]['PrevPhaseRateL1'] = -9999.99
-            # More smoothing artifacts
-            PrevPreproObsInfo[sat_label]['ResetHatchFilter'] = False
-            PreproObsInfo[sat_label]['Status'] = 0
-
-            reset_CS_meas(PreproObsInfo, PrevPreproObsInfo, sat_label, hard_reset=True)
-            CSBuff_reset(PrevPreproObsInfo, sat_label, Conf)
-
-        # Data gap detection & Smoothing & CS detection
-        if PreproObsInfo[sat_label]['ValidL1']:
-            # Only valid measurements or when resetting the Hatch filter account for previous valid epoch
-            PrevPreproObsInfo[sat_label]["PrevL1"] = PreproObsInfo[sat_label]["L1"]
-            PrevPreproObsInfo[sat_label]['PrevEpoch'] = PreproObsInfo[sat_label]['Sod']
-            PrevPreproObsInfo[sat_label]['PrevRej'] = 0.
-
-            # Update carrier phase in L1
-            PrevPreproObsInfo[sat_label]['L1_n_3'] = PrevPreproObsInfo[sat_label]['L1_n_2']
-            PrevPreproObsInfo[sat_label]['L1_n_2'] = PrevPreproObsInfo[sat_label]['L1_n_1']
-            PrevPreproObsInfo[sat_label]['L1_n_1'] = PreproObsInfo[sat_label]['L1']
-            # Update epoch
-            PrevPreproObsInfo[sat_label]['t_n_3'] = PrevPreproObsInfo[sat_label]['t_n_2']
-            PrevPreproObsInfo[sat_label]['t_n_2'] = PrevPreproObsInfo[sat_label]['t_n_1']
-            PrevPreproObsInfo[sat_label]['t_n_1'] = PreproObsInfo[sat_label]['Sod']
-
-            # Valid measurements shall not reset the Hatch filter
-            PrevPreproObsInfo[sat_label]['reset_hatch_filter'] = False
-        else:
-            # if PreproObsInfo[sat_label]['RejectionCause'] != REJECTION_CAUSE['MASKANGLE']:
-                # Store current rejection cause
-            PrevPreproObsInfo[sat_label]['PrevRej'] = PreproObsInfo[sat_label]['RejectionCause']
-
-        # Reset CS detection artifacts
-        if PrevPreproObsInfo[sat_label]['reset_hatch_filter']:
-            reset_CS_meas(PreproObsInfo, PrevPreproObsInfo, sat_label)
-            CSBuff_reset(PrevPreproObsInfo, sat_label, Conf)
-
-        # Other stuff
-        # PrevPreproObsInfo[sat_label]["k_smooth"] = k_smooth
-        # PrevPreproObsInfo[sat_label]["PrevSmoothC1"] = PreproObsInfo[sat_label]["SmoothC1"]
+def update_previous_meas(PreproObs, PrevPreproObsInfo, sat_label):
+    epoch = PreproObs['Sod']
+    # PrevPreproObsInfo[sat_label]['PrevSmoothC1'] = PreproObs['SmoothC1']
+    PrevPreproObsInfo[sat_label]['PrevL1'] = PreproObs['L1']
+    PrevPreproObsInfo[sat_label]['PrevEpoch'] = epoch
+    # PrevPreproObsInfo[sat_label]['PrevRangeRateL1'] = PreproObs['RangeRateL1']
+    # PrevPreproObsInfo[sat_label]['PrevPhaseRateL1'] = PreproObs['PhaseRateL1']
+    PrevPreproObsInfo[sat_label]['PrevRej'] = PreproObs['RejectionCause']
 
 ########################################################################
 # END OF PREPROCESSING FUNCTIONS MODULE

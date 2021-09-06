@@ -101,7 +101,7 @@ def init_prev_output(PrevPreproObsInfo):
             "gap_counter": 0.,
             "reset_hatch_filter": False,  # Flag to reset Hatch filter
             "k_smooth": 0,  # Hatch filter K
-            "PrevEpoch": 0.0,  # Previous SoD
+            "PrevEpoch": 86400.,  # Previous SoD
             "PrevL1": 0.0,  # Previous L1
             "PrevSmoothC1": 0.0,  # Previous Smoothed C1
             "PrevRangeRateL1": 0.,  # Previous Code Rate
