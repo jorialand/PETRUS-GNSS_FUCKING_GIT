@@ -64,8 +64,9 @@ def detect_cycle_slip(meas_CS, cs_threshold, meth='TOD'):
     """
     if meth == 'TOD':
         # Checks
-        if not all([meas_CS['t_n_1'], meas_CS['t_n_2'], meas_CS['t_n_3']]):
-            return False
+        # if not all([meas_CS['t_n_1'], meas_CS['t_n_2'], meas_CS['t_n_3']]):
+        # if not meas_CS['t_n_3']:
+        #     return False
 
         # Previous measurements instants
         t1 = meas_CS['t_n_0'] - meas_CS['t_n_1']
@@ -88,12 +89,12 @@ def detect_cycle_slip(meas_CS, cs_threshold, meth='TOD'):
     else:
         exit('[runPreProcMeas][detect_cycle_slip]' + 'Not available method for cycle slip detection (' + meth + ')')
 
-def get_CS_meas(PreproObsInfo, PrevPreproObsInfo, sat_label):
-    meas_CS = {'L1': PreproObsInfo[sat_label]['L1'],
+def get_CS_meas(PreproObs, PrevPreproObsInfo, sat_label):
+    meas_CS = {'L1': PreproObs['L1'],
                'L1_n_1': PrevPreproObsInfo[sat_label]['L1_n_1'],
                'L1_n_2': PrevPreproObsInfo[sat_label]['L1_n_2'],
                'L1_n_3': PrevPreproObsInfo[sat_label]['L1_n_3'],
-               't_n_0': PreproObsInfo[sat_label]['Sod'],
+               't_n_0': PreproObs['Sod'],
                't_n_1': PrevPreproObsInfo[sat_label]['t_n_1'],
                't_n_2': PrevPreproObsInfo[sat_label]['t_n_2'],
                't_n_3': PrevPreproObsInfo[sat_label]['t_n_3']}
@@ -207,7 +208,7 @@ def init_output(ObsInfo, PreproObsInfo):
         PreproObsInfo[SatLabel] = SatPreproObsInfo
 
 def max_consecutive_CS(PrevPreproObsInfo, sat_label, Conf):
-    return sum(PrevPreproObsInfo[sat_label]['CsBuff']) == get_CS_threshold(Conf)
+    return sum(PrevPreproObsInfo[sat_label]['CsBuff']) == get_CS_threshold(Conf), sum(PrevPreproObsInfo[sat_label]['CsBuff'])
 
 def reset_CS_meas(PreproObs, PrevPreproObsInfo, sat_label, hard_reset=False):
     # L1
@@ -241,8 +242,8 @@ def CSBuff_move_idx(PrevPreproObsInfo, sat_label):
 def CSBuff_notify_no_CS_event(PrevPreproObsInfo, sat_label):
     PrevPreproObsInfo[sat_label]["CsBuff"][PrevPreproObsInfo[sat_label]["CsIdx"]] = 0
 
-def CSBuff_notify_CS_event(PrevPreproObsInfo, sat_label):
-    PrevPreproObsInfo[sat_label]["CsBuff"][PrevPreproObsInfo[sat_label]["CsIdx"]] = 1
+def CSBuff_notify_CS_event(PrevPreproObsInfo, sat_label, CS_flag):
+    PrevPreproObsInfo[sat_label]["CsBuff"][PrevPreproObsInfo[sat_label]["CsIdx"]] = CS_flag
 
 def reset_hatch_filter(PreproObs, PrevPreproObsInfo, sat_label, Conf):
     epoch = PreproObs['Sod']
@@ -346,8 +347,8 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
                      'snr': False,          # Tested, some
                      'psr': True,           # Tested, none
                      'reset_hatch_filter': True, # Tested, many
-                     'gap': True,           # Tested, some
-                     'CS': True,
+                     'gap': False,           # Tested, some
+                     'CS': True,            # Tested, some
                      }
     # Globals
     pass
@@ -433,8 +434,6 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
         # NOTICE Resuming: first, when a data gap is detected, reset hatch filter (this includes non-visibilty periods.
         #       Furthermore, raise the data gap detection flag (excluding sats coming from non-visible periods) (but do
         #       not invalidate the sat, nor reject it) TODO WHY NOT INVALIDATE & REJECT DATA GAPS¿?
-        if sat_label == 'G01' and epoch == 6255:
-            stop = True
         delta_t = epoch - PrevPreproObsInfo[sat_label]['PrevEpoch']
         if delta_t > Conf['SAMPLING_RATE']:
             PrevPreproObsInfo[sat_label]['gap_counter'] = delta_t
@@ -467,41 +466,73 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
         # Check CYCLE SLIPS (if activated)
         # [T2.5 CYCLE SLIPS][PETRUS-PPVE-REQ-080]
         # ------------------------------------------------------------------------------
+        # NOTICE If no 3 previous valid meas, just update the CS detection buffer
+        #        Else compute the CS detection with TOD
+        # NOTICE If CS detected, reject satellite (w/o rejection cause)
+        # NOTICE This will generate sats not valid with 0 rejection cause
+        # NOTICE Else just update the CS detection buffer
+        # NOTICE If CS detected & full CS buffer, add rejection cause CS & reset Hatch filter
+        if sat_label == 'G01':
+            stop = True
+            if epoch == 6480:
+                stop = True
+        if check_CS_activated(Conf):
+            if not PrevPreproObsInfo[sat_label]['reset_hatch_filter']:
+                if PrevPreproObsInfo[sat_label]['t_n_3']:
+                    CS_flag = detect_cycle_slip(get_CS_meas(PreproObs, PrevPreproObsInfo, sat_label),
+                                                get_CS_tolerance(Conf), meth='TOD')
+                    CSBuff_notify_CS_event(PrevPreproObsInfo, sat_label, CS_flag)
+                    # Just invalidate the satellite because of phase cycle slip (no reject till successive CS detected)
+                    if CS_flag:
+                        # Invalidate the satellite
+                        set_sat_valid(PreproObs, False, None)
+                        if TESTING and TESTING_PRINT['CS']:
+                            print('[TESTING][runPreProcMeas]' + ' epoch' + str(epoch) + ' Satellite ' + sat_label +
+                                  ' (CS flag)')
+                        # CS Buffer full¿? -> reset Hatch filter
+                        CS_buffer_full, sum = max_consecutive_CS(PrevPreproObsInfo, sat_label, Conf)
+                        if CS_buffer_full:
+                            set_sat_valid(PreproObs, None, REJECTION_CAUSE['CYCLE_SLIP'])
+                            PrevPreproObsInfo[sat_label]['reset_hatch_filter'] = True
+                            if TESTING and TESTING_PRINT['CS']:
+                                print('[TESTING][runPreProcMeas]' + ' epoch' + str(epoch) + ' Satellite ' + sat_label +
+                                      ' (Full CS buffer)')
+                        # Update CS detection buffer and skip satellite
+                        else:
+                            CSBuff_move_idx(PrevPreproObsInfo, sat_label)
+                            continue
 
-    #     if check_CS_activated(Conf):
-    #         if not PrevPreproObsInfo[sat_label]['reset_hatch_filter']:
-    #             CS_flag = detect_cycle_slip(get_CS_meas(PreproObsInfo, PrevPreproObsInfo, sat_label),
-    #                                         get_CS_tolerance(Conf), meth='TOD')
-    #             if CS_flag:
-    #                 set_sat_valid(sat_label, False, REJECTION_CAUSE['CYCLE_SLIP'], PreproObsInfo)
-    #
-    #                 if TESTING and False:
-    #                     print('[TESTING][runPreProcMeas]' + ' epoch' + ObsInfo[0][0] +
-    #                           ' Satellite ' + sat_label + '(CS)')
-    #
-    #             CSBuff_update(CS_flag, PrevPreproObsInfo, sat_label)
-    #
-    #             # Reset Hatch filter
-    #             if max_consecutive_CS(PrevPreproObsInfo, sat_label, Conf):
-    #                 PrevPreproObsInfo[sat_label]['reset_hatch_filter'] = True
-    #
-    #                 if TESTING and True:
-    #                     print('[TESTING][runPreProcMeas]' + ' epoch' + ObsInfo[0][0] +
-    #                           ' Satellite ' + sat_label + ' Hatch filter reset (CS)')
-    #     # ---- From here, only sats within max channels number
-    #     # ---- & min mask angle
-    #     # ---- & min SNR
-    #     # ---- & max PSR
-    #     # ---- & GAPS clean
-    #     # ---- & CS clean
-    #     # ------------------------------------------------------------------------------
-    #
+                # Update CS detection buffer
+                CSBuff_move_idx(PrevPreproObsInfo, sat_label)
+                CS_buffer_full, sum = max_consecutive_CS(PrevPreproObsInfo, sat_label, Conf)
+                # Store L1 & epoch values for TOD CS detection
+                if sum == 0:
+                    PrevPreproObsInfo[sat_label]['L1_n_3'] = PrevPreproObsInfo[sat_label]['L1_n_2']
+                    PrevPreproObsInfo[sat_label]['L1_n_2'] = PrevPreproObsInfo[sat_label]['L1_n_1']
+                    PrevPreproObsInfo[sat_label]['L1_n_1'] = PreproObs['L1']
+                    PrevPreproObsInfo[sat_label]['t_n_3'] = PrevPreproObsInfo[sat_label]['t_n_2']
+                    PrevPreproObsInfo[sat_label]['t_n_2'] = PrevPreproObsInfo[sat_label]['t_n_1']
+                    PrevPreproObsInfo[sat_label]['t_n_1'] = epoch
+
+
+        # ---- From here, only sats within max channels number
+        # ---- & min mask angle
+        # ---- & min SNR
+        # ---- & max PSR
+        # ---- & GAPS clean
+        # ---- & CS clean
+        # ---- TESTED WITH ./testing_cs.sh
+        # ------------------------------------------------------------------------------
+
     #     # Hatch filter (re)initialization
     #     # [T2.6 SMOOTHING][PETRUS-PPVE-REQ-100]
     #     # -------------------------------------------------------------------------------
     #     # Reset Hatch filter
         if PrevPreproObsInfo[sat_label]['reset_hatch_filter']:
             reset_hatch_filter(PreproObs, PrevPreproObsInfo, sat_label, Conf)
+            if TESTING and TESTING_PRINT['reset_hatch_filter']:
+                print('[TESTING][runPreProcMeas]' + ' epoch' + str(epoch) + ' Satellite ' + sat_label +
+                      ' Hatch filter reset')
             continue
     #
     #     #  Perform the Code Carrier SMOOTHING with a Hatch Filter

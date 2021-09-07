@@ -49,38 +49,38 @@ def initPlot(PreproObsFile, PlotConf, Title, Label):
 
 # Plot Satellite Visibility
 def plotSatVisibility(PreproObsFile, PreproObsData):
-
+    pass
 # Plot Number of Satellites
 def plotNumSats(PreproObsFile, PreproObsData):
-
+    pass
 # Plot Satellite Polar View
 def plotSatPolarView(PreproObsFile, PreproObsData):
-
+    pass
 
 # Plot C1 - C1Smoothed
 def plotC1C1Smoothed(PreproObsFile, PreproObsData):
-
+    pass
 
 # Plot Rejection Flags
 def plotRejectionFlags(PreproObsFile, PreproObsData):
-
+pass
 # Plot Code Rate
 def plotCodeRate(PreproObsFile, PreproObsData):
-
+pass
 
 # Plot Phase Rate
 def plotPhaseRate(PreproObsFile, PreproObsData):
-
+    pass
 
 # VTEC Gradient
 def plotVtecGradient(PreproObsFile, PreproObsData):
-
+    pass
 # AATR index
 def plotAatr(PreproObsFile, PreproObsData):
-
+    pass
 
 def generatePreproPlots(PreproObsFile):
-    
+    pass
     # Purpose: generate output plots regarding Preprocessing results
 
     # Parameters

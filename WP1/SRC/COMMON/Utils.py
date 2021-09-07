@@ -41,5 +41,7 @@ def get_sat_label(PRN):
     return "G" + "%02d" % int(PRN)
 
 def set_sat_valid(PreproObs, a_valid, a_rejection_cause, ):
-    PreproObs["ValidL1"] = a_valid
-    PreproObs["RejectionCause"] = a_rejection_cause
+    if a_valid != None:
+        PreproObs["ValidL1"] = a_valid
+    if a_rejection_cause != None:
+        PreproObs["RejectionCause"] = a_rejection_cause
