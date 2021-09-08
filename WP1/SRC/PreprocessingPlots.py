@@ -63,10 +63,10 @@ def plotC1C1Smoothed(PreproObsFile, PreproObsData):
 
 # Plot Rejection Flags
 def plotRejectionFlags(PreproObsFile, PreproObsData):
-pass
+    pass
 # Plot Code Rate
 def plotCodeRate(PreproObsFile, PreproObsData):
-pass
+    pass
 
 # Plot Phase Rate
 def plotPhaseRate(PreproObsFile, PreproObsData):

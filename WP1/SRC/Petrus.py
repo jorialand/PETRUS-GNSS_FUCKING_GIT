@@ -99,13 +99,13 @@ def init_prev_output(PrevPreproObsInfo):
                       int(Conf["MIN_NCS_TH"][CSNEPOCHS]),  # Number of consecutive epochs for CS
             "CsIdx": 0,  # Index of CS detector buffer
             "gap_counter": 0.,
-            "reset_hatch_filter": False,  # Flag to reset Hatch filter
+            "reset_hatch_filter": True,  # Flag to reset Hatch filter
             "k_smooth": 0,  # Hatch filter K
             "PrevEpoch": 86400.,  # Previous SoD
             "PrevL1": 0.0,  # Previous L1
             "PrevSmoothC1": 0.0,  # Previous Smoothed C1
-            "PrevRangeRateL1": 0.,  # Previous Code Rate
-            "PrevPhaseRateL1": 0.,  # Previous Phase Rate
+            "PrevRangeRateL1": -9999.9,  # Previous Code Rate
+            "PrevPhaseRateL1": -9999.9,  # Previous Phase Rate
             "PrevGeomFree": 0.0,  # Previous Geometry-Free Observable
             "PrevGeomFreeEpoch": 0.0,  # Previous Geometry-Free Observable
             "PrevRej": 0,  # Previous Rejection flag
