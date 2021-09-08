@@ -30,11 +30,12 @@ sys.path.insert(0, Common)
 from collections import OrderedDict
 from COMMON import GnssConstants as Const
 from COMMON.Utils import *
-# from COMMON.Iono import computeIonoMappingFunction
+# from COMMON.Iono import compute_iono_mapping_function
 
 from InputOutput import RcvrIdx, ObsIdx, REJECTION_CAUSE
 from InputOutput import CSNEPOCHS
 
+from numpy import deg2rad, cos
 
 # Preprocessing internal functions
 # -----------------------------------------------------------------------
@@ -65,6 +66,13 @@ def compute_code_acc(PreproObs, PrevPreproObsInfo, sat_label, delta_t):
 def compute_code_rate(PreproObs, PrevPreproObsInfo, sat_label, delta_t):
     return (PreproObs["SmoothC1"] - PrevPreproObsInfo[sat_label]["PrevSmoothC1"]) / delta_t
 
+def compute_iono_mapping_function(elev_deg):
+    EARTH_RADIUS = 6378136.3  # in meters
+    IONO_HEIGHT = 350000.0  # in meters
+
+    Mpp = (1.0 - ((EARTH_RADIUS * cos(deg2rad(elev_deg))) /
+                  (EARTH_RADIUS + IONO_HEIGHT)) ** 2) ** (-0.5)
+    return Mpp
 
 def compute_phase_acc(PreproObs, PrevPreproObsInfo, sat_label, delta_t):
     return (PreproObs['PhaseRateL1'] - PrevPreproObsInfo[sat_label]['PrevPhaseRateL1']) / delta_t
@@ -642,6 +650,32 @@ def runPreProcMeas(Conf, Rcvr, ObsInfo, PrevPreproObsInfo):
         # Save VALID current epoch meas for next epoch
         update_previous_meas(PreproObs, PrevPreproObsInfo, sat_label)
 
+    # Build the Iono related gradients
+    for sat_label, PreproObs in PreproObsInfo.items():
+        PreproObs["Mpp"] = compute_iono_mapping_function(PreproObs["Elevation"])
+
+        # Build Geometry-Free combination of Phases
+        # Check if L1 and L2 are OK
+        if PreproObs["ValidL1"] == 1 and PreproObs["L2"] > 0:
+            # Compute the Geometry-Free Observable
+            PreproObs["GeomFree"] = (Const.GPS_L1_WAVE * PreproObs["L1"]) - (Const.GPS_L2_WAVE * PreproObs["L2"])
+            # Obtain the final Geom-free dividing by 1 - GAMMA
+            PreproObs["GeomFree"] = PreproObs["GeomFree"] / (1 - Const.GPS_GAMMA_L1L2)
+
+            # Compute the VTEC Rate
+            if PrevPreproObsInfo[sat_label]["PrevGeomFree"] > 0:
+                # Compute STEC Gradient
+                delta_stec = (PreproObs["GeomFree"] - PrevPreproObsInfo[sat_label]["PrevGeomFree"]) / (PreproObs["Sod"] - PrevPreproObsInfo[sat_label]["PrevGeomFreeEpoch"])
+                # Compute VTEC Gradient
+                delta_vtec = delta_stec / PreproObs["Mpp"]
+                # Store Delta VTEC in mm/s
+                PreproObs["VtecRate"] = delta_vtec * 1000
+                # Compute AATR
+                PreproObs["iAATR"] = PreproObs["VtecRate"] / PreproObs["Mpp"]
+
+            # Update previous geometry-free values
+            PrevPreproObsInfo[sat_label]["PrevGeomFreeEpoch"] = PreproObs["Sod"]
+            PrevPreproObsInfo[sat_label]["PrevGeomFree"] = PreproObs["GeomFree"]
 
     return PreproObsInfo
 
