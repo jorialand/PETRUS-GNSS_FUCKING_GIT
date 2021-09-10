@@ -40,7 +40,7 @@ from InputOutput import generatePreproFile
 from InputOutput import PreproHdr
 from InputOutput import CSNEPOCHS
 from Preprocessing import runPreProcMeas
-# from PreprocessingPlots import generatePreproPlots
+from PreprocessingPlots import generatePreproPlots
 from COMMON.Dates import convertJulianDay2YearMonthDay
 from COMMON.Dates import convertYearMonthDay2Doy
 
@@ -211,7 +211,7 @@ print( '\n------------------------------------')
 print( '--> END OF PETRUS ANALYSIS')
 print( '------------------------------------')
 
-print( 'Check figures in output folder: PPVE/figures/')
+print( 'Check figures in output folder: PPVE/FIGURES/')
 
 
 #######################################################
