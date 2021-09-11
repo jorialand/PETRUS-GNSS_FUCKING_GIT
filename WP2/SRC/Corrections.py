@@ -29,7 +29,35 @@ from COMMON import GnssConstants as Const
 from InputOutput import RcvrIdx, SatIdx, LosIdx
 import numpy as np
 
+# Compute the clock relativistic effect
+def computeDtr(SatInfo, SatLabel):
+    x = float(SatInfo[SatLabel][SatIdx['SAT-X']])
+    y = float(SatInfo[SatLabel][SatIdx['SAT-Y']])
+    z = float(SatInfo[SatLabel][SatIdx['SAT-Z']])
+    vx = float(SatInfo[SatLabel][SatIdx['VEL-X']])
+    vy = float(SatInfo[SatLabel][SatIdx['VEL-Y']])
+    vz = float(SatInfo[SatLabel][SatIdx['VEL-Z']])
+    return (-2 * np.dot([x,y,z], [vx,vy,vz]) ) / Const.SPEED_OF_LIGHT
 
+# Compute thee Satellite Corrected Position and Clock applying the SBAS FLT Corrections
+def correctSatPosClk(SatInfo, SatLabel):
+    # Satellite position at TT corrected by SBAS LTC (Also corrected from Sagnac Effect. WGS84 ref)
+    sbas_x = float(SatInfo[SatLabel][SatIdx['SAT-X']]) + float(SatInfo[SatLabel][SatIdx['LTC-X']])
+    sbas_y = float(SatInfo[SatLabel][SatIdx['SAT-Y']]) + float(SatInfo[SatLabel][SatIdx['LTC-Y']])
+    sbas_z = float(SatInfo[SatLabel][SatIdx['SAT-Z']]) + float(SatInfo[SatLabel][SatIdx['LTC-Z']])
+
+    # Satellite clock corrected with SBAS FLT
+    b_sbas = float(SatInfo[SatLabel][SatIdx['SAT-CLK']])  + computeDtr(SatInfo, SatLabel) - \
+             float(SatInfo[SatLabel][SatIdx['TGD']]) + float(SatInfo[SatLabel][SatIdx['FC']]) + \
+             float(SatInfo[SatLabel][SatIdx['LTC-B']])
+
+    # Checks
+    if 0. in [sbas_x, sbas_y, sbas_z, b_sbas]:
+        sys.stderr.write("[WARNING][Corrections][correctSatPosClk] Null data when it should't")
+
+    return (sbas_x, sbas_y, sbas_z), b_sbas
+
+# The most important function here
 def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
 
     # Purpose: correct GNSS preprocessed measurements and compute
@@ -87,6 +115,8 @@ def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
 
     # Loop over satellites
     for SatLabel, SatPrepro in PreproObsInfo.items():
+        epoch = SatPrepro['Sod']
+
         # If satellite is in convergence
         if(SatPrepro["Status"] == 1):
             # Initialize output info
@@ -98,30 +128,23 @@ def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
                 "IppLon": 0.0,          # IPP Longitude
                 "IppLat": 0.0,          # IPP Latitude
                 "Flag": 1,              # 0: Not Used 1: Used for PA 2: Used for NPA
-                "SatX": 0.0,            # X-Component of the Satellite Position 
-                                        # corrected with SBAS LTC
-                "SatY": 0.0,            # Y-Component of the Satellite Position 
-                                        # corrected with SBAS LTC
-                "SatZ": 0.0,            # Z-Component of the Satellite Position 
-                                        # corrected with SBAS LTC
+                "SatX": 0.0,            # X-Component of the Satellite Position corrected with SBAS LTC
+                "SatY": 0.0,            # Y-Component of the Satellite Position corrected with SBAS LTC
+                "SatZ": 0.0,            # Z-Component of the Satellite Position corrected with SBAS LTC
                 "SatClk": 0.0,          # Satellite Clock corrected with SBAS FLT
                 "Uisd": 0.0,            # User Ionospheric Slant Delay
                 "Std": 0.0,             # Slant Tropospheric Delay
                 "CorrPsr": 0.0,         # Pseudo Range corrected from delays
-                "GeomRange": 0.0,       # Geometrical Range (distance between Satellite 
-                                        # Position and Receiver Reference Position)
+                "GeomRange": 0.0,       # Geometrical Range (distance between Satellite Position and Receiver Reference Position)
                 "PsrResidual": 0.0,     # Pseudo Range Residual
                 "RcvrClk": 0.0,         # Receiver Clock estimation
-                "SigmaFlt": 0,          # Sigma of the residual error associated to the 
-                                        # fast and long-term correction (FLT)
+                "SigmaFlt": 0,          # Sigma of the residual error associated to the fast and long-term correction (FLT)
                 "SigmaUire": 0,         # User Ionospheric Range Error Sigma
-                "SigmaTropo": 0,        # Sigma of the Tropospheric error 
+                "SigmaTropo": 0,        # Sigma of the Tropospheric error
                 "SigmaAirborne": 0.0,   # Sigma Airborne Error
                 "SigmaNoiseDiv": 0.0,   # Sigma of the receiver noise + divergence
                 "SigmaMultipath": 0.0,  # Sigma of the receiver multipath
-                "SigmaUere": 0.0,       # Sigma User Equivalent Range Error (Sigma of 
-                                        # the total residual error associated to the 
-                                        # satellite)
+                "SigmaUere": 0.0,       # Sigma User Equivalent Range Error (Sigma of the total residual error associated to the satellite)
                 "EntGps": 0.0,          # ENT to GPS Offset
 
             } # End of SatCorrInfo
@@ -137,94 +160,102 @@ def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
             SatCorrInfo["Azimuth"] = SatPrepro["Azimuth"]
 
             # If SBAS information is available for current satellite
-            if (SatLabel in SatInfo) and (SatLabel in LosInfo):
-                # Get IPP Longitude
-                SatCorrInfo["IppLon"] = float(LosInfo[SatLabel][LosIdx["IPPLON"]])
-                # Get IPP Latitude
-                SatCorrInfo["IppLat"] = float(LosInfo[SatLabel][LosIdx["IPPLAT"]])
+            # (Cannot continue if for current epoch, the current satellite is
+            # not present in the Sat/Los files)
+            if not ((SatLabel in SatInfo) and (SatLabel in LosInfo)):
+                continue
+
+            # Get IPP Longitude
+            SatCorrInfo["IppLon"] = float(LosInfo[SatLabel][LosIdx["IPPLON"]])
+            # Get IPP Latitude
+            SatCorrInfo["IppLat"] = float(LosInfo[SatLabel][LosIdx["IPPLAT"]])
 
             # Check monitoring status (UDREi<12 for Service level “PA”)
-            # if Sat[Prn].Monitored:
+            if int(SatInfo[SatLabel][SatIdx['UDREI']]) < 12:
+                # Apply the SBAS corrections to the satellite position and clock
+                # [T2.1.1 SAT CORRECTION AND SIGMA FLT][PETRUS-CORR-REQ-010]
+                # ----------------------------------------------------------------------
+                SatPos, SatClk = correctSatPosClk(SatInfo,SatLabel)
+                SatCorrInfo['SatX'] = SatPos[0]
+                SatCorrInfo['SatY'] = SatPos[1]
+                SatCorrInfo['SatZ'] = SatPos[2]
+                SatCorrInfo['SatClk'] = SatClk
 
-            # # Apply the SBAS corrections to the satellite position and clock
-            # SatPos, SatClk = correctSatPosClk(Sat[Prn])
+                # Compute the SigmaFLT projected into the User direction
+                # As per MOPS-DO-229D Section A.4.5.1
+                # SigmaFLT = computeSigmaFlt(Sat[Prn].SigmaUdre, Sat[Prn].DegradationParams)
 
-            # SCHEMATIC
+                # SCHEMATIC
 
-            # Compute the SigmaFLT projected into the User direction
-            # As per MOPS-DO-229D Section A.4.5.1
-            # SigmaFLT = computeSigmaFlt(Sat[Prn].SigmaUdre, Sat[Prn].DegradationParams)
+                # Compute User Ionospheric Slant Delay and Sigma
+                # UISD and UIRE can be read from LOS file, using MOPS interpolation
+                # ----------------------------------------------------------------------
+                # Compute UISD and UIRE on the IPP using MOPS interpolation
+                # Ref: MOPS-DO-229D Section A.4.4.10.3
+                # UISD, UIRE= computeUisdAndUire(Los[Prn])
 
-            # SCHEMATIC
+                # Check INTERP flag in LOS file before interpolating. Two types of
+                # interpolation shall be handled: rectangular and triangular:
 
-            # Compute User Ionospheric Slant Delay and Sigma
-            # UISD and UIRE can be read from LOS file, using MOPS interpolation
-            # ----------------------------------------------------------------------
-            # Compute UISD and UIRE on the IPP using MOPS interpolation
-            # Ref: MOPS-DO-229D Section A.4.4.10.3
-            # UISD, UIRE= computeUisdAndUire(Los[Prn])
+                # SCHEMATIC
 
-            # Check INTERP flag in LOS file before interpolating. Two types of
-            # interpolation shall be handled: rectangular and triangular:
+                # NOTE: Check Input LOS file that gives already the GIVD and GIVE of the IGPs around the IPP.
+                # You do not need to make the selection of the IGPs around the IPP.
+                # Weight the GIVD of each IGP and apply the mapping function to compute the UISD:
+                # SCHEMATIC
+                # Weight the GIVE of each IGP and apply the mapping function to compute the Sigma UIRE:
+                # SCHEMATIC
 
-            # SCHEMATIC
+                # Compute the STD: Slant Tropo Delay and associated SigmaTROPO
+                # Refer to MOPS guidelines in Appendix A section A.4.2.4
+                # -----------------------------------------------------------------------
+                # Compute Tropospheric Mapping Function
+                # TropoMpp = computeTropoMpp(Elevation)
 
-            # NOTE: Check Input LOS file that gives already the GIVD and GIVE of the IGPs around the IPP.
-            # You do not need to make the selection of the IGPs around the IPP.
-            # Weight the GIVD of each IGP and apply the mapping function to compute the UISD:
-            # SCHEMATIC
-            # Weight the GIVE of each IGP and apply the mapping function to compute the Sigma UIRE:
-            # SCHEMATIC
+                # SCHEMATIC
 
-            # Compute the STD: Slant Tropo Delay and associated SigmaTROPO
-            # Refer to MOPS guidelines in Appendix A section A.4.2.4
-            # -----------------------------------------------------------------------
-            # Compute Tropospheric Mapping Function
-            # TropoMpp = computeTropoMpp(Elevation)
+                # Compute the Slant Tropospheric Delay Error Sigma
+                # SigmaTROPO = computeSigmaTROPO(TropoMpp)
 
-            # SCHEMATIC
+                # SCHEMATIC
 
-            # Compute the Slant Tropospheric Delay Error Sigma
-            # SigmaTROPO = computeSigmaTROPO(TropoMpp)
+                # -----------------------------------------------------------------------
+                # [CHALLENGING OPTION] Compute the Slant Tropospheric Delay
+                # Note that STD can be read from LOS file, or
+                # Challenging option using MOPS Tropo Model in Appendix A.
+                # STD = computeSlantTropoDelay(RCVR[iRec].llh, Doy, TropoMpp)
 
-            # SCHEMATIC
+                # SCHEMATIC
+                # -----------------------------------------------------------------------
 
-            # -----------------------------------------------------------------------
-            # [CHALLENGING OPTION] Compute the Slant Tropospheric Delay
-            # Note that STD can be read from LOS file, or
-            # Challenging option using MOPS Tropo Model in Appendix A.
-            # STD = computeSlantTropoDelay(RCVR[iRec].llh, Doy, TropoMpp)
+                # Compute User Airborne Sigma. Ref: MOPS-DO-229D Section J.2.4
+                # -----------------------------------------------------------------------
+                # Consider Maximum Signal Level when satellite elevation is greater
+                # than Conf.ELEV_NOISE_TH=20, and Minimum Signal Level otherwise
+                # SigmaAIR = computeSigmaAIR(Elev)
 
-            # SCHEMATIC
-            # -----------------------------------------------------------------------
+                # Compute Sigma UERE by combining all Sigma contributions
+                # Ref: MOPS-DO-229D Section J.1
+                #-----------------------------------------------------------------------
+                # SCHEMATIC
 
-            # Compute User Airborne Sigma. Ref: MOPS-DO-229D Section J.2.4
-            # -----------------------------------------------------------------------
-            # Consider Maximum Signal Level when satellite elevation is greater
-            # than Conf.ELEV_NOISE_TH=20, and Minimum Signal Level otherwise
-            # SigmaAIR = computeSigmaAIR(Elev)
+                # Corrected Measurements from previous information
+                #-----------------------------------------------------------------------
+                # CorrPsr = SmoothedL1 + SatClk - UISD - STD
 
-            # Compute Sigma UERE by combining all Sigma contributions
-            # Ref: MOPS-DO-229D Section J.1
-            #-----------------------------------------------------------------------
-            # SCHEMATIC
+                # Compute the Geometrical Range
+                # -----------------------------------------------------------------------
+                # GeomRange = computeGeomRange(SATxyz, RCVRXYZ)
 
-            # Corrected Measurements from previous information
-            #-----------------------------------------------------------------------
-            # CorrPsr = SmoothedL1 + SatClk - UISD - STD
-
-            # Compute the Geometrical Range
-            # -----------------------------------------------------------------------
-            # GeomRange = computeGeomRange(SATxyz, RCVRXYZ)
-
-            # Compute the first Residual removing the geometrical range
-            # -----------------------------------------------------------------------
-            # PsrResidual = CorrPsr - GeomRange
+                # Compute the first Residual removing the geometrical range
+                # -----------------------------------------------------------------------
+                # PsrResidual = CorrPsr - GeomRange
+            # End of if Sat[Prn].Monitored:
 
             # Prepare output for the satellite
             CorrInfo[SatLabel] = SatCorrInfo
 
-            # End of if Sat[Prn].Monitored:
+
         # End of if(SatPrepro["Status"] == 1):
     # End of for SatLabel, SatPrepro in PreproObsInfo.items():
 
