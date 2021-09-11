@@ -224,8 +224,24 @@ def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
             # Prepare output for the satellite
             CorrInfo[SatLabel] = SatCorrInfo
 
+            # End of if Sat[Prn].Monitored:
         # End of if(SatPrepro["Status"] == 1):
-
     # End of for SatLabel, SatPrepro in PreproObsInfo.items():
 
+    # Estimate the Receiver Clock first guess as a weighted average of the Residuals # (with the weights W=1/UERE2)
+    # RcvrClk = estimateRcvrClk(PsrResidual, SigmaUERE)
+
+    # Loop over satellites at PsrResidual Output
+    # for Prn in Sat[Prn].Monitored:
+        # Correct Residual from the first guess of the Receiver Clock
+        # PsrResidual = PsrResidual - RcvrClk
+
+    # Estimate the ENT-GPS Offset as the instantaneous average of the orbit corrections
+    # #(LTC) projected into the user line-of-sight (Ulos) minus the clock corrections (FC+LTC)
+    # ENTtoGPS = estimateENTtoGPS(FLT_Corrections)
+
+    # SCHEMATIC
+
     return CorrInfo
+
+# END OF runCorrectMeas()
