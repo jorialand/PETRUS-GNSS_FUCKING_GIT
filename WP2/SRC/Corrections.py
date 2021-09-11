@@ -143,6 +143,84 @@ def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
                 # Get IPP Latitude
                 SatCorrInfo["IppLat"] = float(LosInfo[SatLabel][LosIdx["IPPLAT"]])
 
+            # Check monitoring status (UDREi<12 for Service level “PA”)
+            # if Sat[Prn].Monitored:
+
+            # # Apply the SBAS corrections to the satellite position and clock
+            # SatPos, SatClk = correctSatPosClk(Sat[Prn])
+
+            # SCHEMATIC
+
+            # Compute the SigmaFLT projected into the User direction
+            # As per MOPS-DO-229D Section A.4.5.1
+            # SigmaFLT = computeSigmaFlt(Sat[Prn].SigmaUdre, Sat[Prn].DegradationParams)
+
+            # SCHEMATIC
+
+            # Compute User Ionospheric Slant Delay and Sigma
+            # UISD and UIRE can be read from LOS file, using MOPS interpolation
+            # ----------------------------------------------------------------------
+            # Compute UISD and UIRE on the IPP using MOPS interpolation
+            # Ref: MOPS-DO-229D Section A.4.4.10.3
+            # UISD, UIRE= computeUisdAndUire(Los[Prn])
+
+            # Check INTERP flag in LOS file before interpolating. Two types of
+            # interpolation shall be handled: rectangular and triangular:
+
+            # SCHEMATIC
+
+            # NOTE: Check Input LOS file that gives already the GIVD and GIVE of the IGPs around the IPP.
+            # You do not need to make the selection of the IGPs around the IPP.
+            # Weight the GIVD of each IGP and apply the mapping function to compute the UISD:
+            # SCHEMATIC
+            # Weight the GIVE of each IGP and apply the mapping function to compute the Sigma UIRE:
+            # SCHEMATIC
+
+            # Compute the STD: Slant Tropo Delay and associated SigmaTROPO
+            # Refer to MOPS guidelines in Appendix A section A.4.2.4
+            # -----------------------------------------------------------------------
+            # Compute Tropospheric Mapping Function
+            # TropoMpp = computeTropoMpp(Elevation)
+
+            # SCHEMATIC
+
+            # Compute the Slant Tropospheric Delay Error Sigma
+            # SigmaTROPO = computeSigmaTROPO(TropoMpp)
+
+            # SCHEMATIC
+
+            # -----------------------------------------------------------------------
+            # [CHALLENGING OPTION] Compute the Slant Tropospheric Delay
+            # Note that STD can be read from LOS file, or
+            # Challenging option using MOPS Tropo Model in Appendix A.
+            # STD = computeSlantTropoDelay(RCVR[iRec].llh, Doy, TropoMpp)
+
+            # SCHEMATIC
+            # -----------------------------------------------------------------------
+
+            # Compute User Airborne Sigma. Ref: MOPS-DO-229D Section J.2.4
+            # -----------------------------------------------------------------------
+            # Consider Maximum Signal Level when satellite elevation is greater
+            # than Conf.ELEV_NOISE_TH=20, and Minimum Signal Level otherwise
+            # SigmaAIR = computeSigmaAIR(Elev)
+
+            # Compute Sigma UERE by combining all Sigma contributions
+            # Ref: MOPS-DO-229D Section J.1
+            #-----------------------------------------------------------------------
+            # SCHEMATIC
+
+            # Corrected Measurements from previous information
+            #-----------------------------------------------------------------------
+            # CorrPsr = SmoothedL1 + SatClk - UISD - STD
+
+            # Compute the Geometrical Range
+            # -----------------------------------------------------------------------
+            # GeomRange = computeGeomRange(SATxyz, RCVRXYZ)
+
+            # Compute the first Residual removing the geometrical range
+            # -----------------------------------------------------------------------
+            # PsrResidual = CorrPsr - GeomRange
+
             # Prepare output for the satellite
             CorrInfo[SatLabel] = SatCorrInfo
 
