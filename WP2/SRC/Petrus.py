@@ -31,6 +31,7 @@ sys.path.insert(0, Common)
 from collections import OrderedDict
 from yaml import dump
 from COMMON import GnssConstants as Const
+
 from InputOutput import readConf
 from InputOutput import processConf
 from InputOutput import readRcvr
@@ -39,10 +40,11 @@ from InputOutput import openInputFile
 from InputOutput import readObsEpoch
 from InputOutput import readCorrectInputs
 from InputOutput import generatePreproFile
-# from InputOutput import generateCorrFile
+from InputOutput import generateCorrFile
 from InputOutput import PreproHdr, CorrHdr
 from InputOutput import CSNEPOCHS
 from InputOutput import ObsIdx
+
 from Preprocessing import runPreProcMeas
 # from PreprocessingPlots import generatePreproPlots
 # from CorrectionsPlots import generateCorrPlots
@@ -229,7 +231,7 @@ int(Conf["MIN_NCS_TH"][CSNEPOCHS]),  # Number of consecutive epochs for CS
                         # If CORR outputs are requested
                         # if Conf["CORR_OUT"] == 1:
                             # Generate output file
-                            # generateCorrFile(fcorr, CorrInfo)
+                            generateCorrFile(fcorr, CorrInfo)
 
                 # end if ObsInfo != []:
                 else:

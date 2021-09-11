@@ -1149,6 +1149,44 @@ def generatePreproFile(fpreprobs, PreproObsInfo):
 
 # End of generatePreproFile
 
+def generateCorrFile(fcorr, SatCorr):
+    # Loop over satellites
+    for SatLabel, SatCorr in SatCorr.items():
+        # Prepare outputs
+        Outputs = OrderedDict({})
+        Outputs["SOD"] = SatCorr["Sod"]
+        Outputs["DOY"] = SatCorr["Doy"]
+        Outputs["CONST"] = SatLabel[0]
+        Outputs["PRN"] = int(SatLabel[1:])
+        Outputs["ELEV"] = SatCorr["Elevation"]
+        Outputs["AZIM"] = SatCorr["Azimuth"]
+        Outputs["IPPLON"] = SatCorr["IppLon"]
+        Outputs["IPPLAT"] = SatCorr["IppLat"]
+        Outputs["FLAG"] = SatCorr["Flag"]
+        Outputs["SAT-X"] = SatCorr["SatX"]
+        Outputs["SAT-Y"] = SatCorr["SatY"]
+        Outputs["SAT-Z"] = SatCorr["SatZ"]
+        Outputs["SAT-CLK"] = SatCorr["SatClk"]
+        Outputs["UISD"] = SatCorr["Uisd"]
+        Outputs["STD"] = SatCorr["Std"]
+        Outputs["CORR-PSR"] = SatCorr["CorrPsr"]
+        Outputs["GEOM-RNGE"] = SatCorr["GeomRange"]
+        Outputs["PSR-RES"] = SatCorr["PsrResidual"]
+        Outputs["RCVR-CLK"] = SatCorr["RcvrClk"]
+        Outputs["SFLT"] = SatCorr["SigmaFlt"]
+        Outputs["SUIRE"] = SatCorr["SigmaUire"]
+        Outputs["STROPO"] = SatCorr["SigmaTropo"]
+        Outputs["SAIR"] = SatCorr["SigmaAirborne"]
+        Outputs["SNOISEDIV"] = SatCorr["SigmaNoiseDiv"]
+        Outputs["SMP"] = SatCorr["SigmaMultipath"]
+        Outputs["SUERE"] = SatCorr["SigmaUere"]
+        Outputs["ENTtoGPS"] = SatCorr["EntGps"]
+
+        # Write line
+        for i, result in enumerate(Outputs):
+            fcorr.write(((CorrFmt[i] + " ") % Outputs[result]))
+
+        fcorr.write("\n")
 
 def openInputFile(Path):
     
