@@ -166,7 +166,7 @@ for Rcvr in RcvrInfo.keys():
             "t_n_2": 0.0,            # t-2 epoch
             "t_n_3": 0.0,            # t-3 epoch
             "CsBuff": [0] * \
-int(Conf["MIN_NCS_TH"][CSNEPOCHS]),  # Number of consecutive epochs for CS
+            int(Conf["MIN_NCS_TH"][CSNEPOCHS]),  # Number of consecutive epochs for CS
             "CsIdx": 0,              # Index of CS detector buffer
             "ResetHatchFilter": 1,   # Flag to reset Hatch filter
             "Ksmooth": 0,            # Hatch filter K
@@ -229,7 +229,8 @@ int(Conf["MIN_NCS_TH"][CSNEPOCHS]),  # Number of consecutive epochs for CS
                         CorrInfo = runCorrectMeas(Conf, RcvrInfo[Rcvr], PreproObsInfo, SatInfo, LosInfo)
 
                         # If CORR outputs are requested
-                        # if Conf["CORR_OUT"] == 1:
+                        if Conf["CORR_OUT"] == 1:
+                            pass
                             # Generate output file
                             generateCorrFile(fcorr, CorrInfo)
 
