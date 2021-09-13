@@ -39,6 +39,33 @@ def computeDtr(SatInfo, SatLabel):
     vz = float(SatInfo[SatLabel][SatIdx['VEL-Z']])
     return (-2 * np.dot([x,y,z], [vx,vy,vz]) ) / Const.SPEED_OF_LIGHT
 
+# Compute the SigmaFLT projected into the User direction
+def computeSigmaFlt(SatInfo, SatLabel):
+    """
+    Applicable standards: MOPS-DO-229D Section A.4.5.1
+    """
+    sigmaFLT: float
+
+    # Get the data from SatInfo
+    RSS_flag = bool(SatInfo[SatLabel][SatIdx['RSS']])
+    sigma_udre = float(SatInfo[SatLabel][SatIdx['SIGMAUDRE']])
+    delta_udre = float(SatInfo[SatLabel][SatIdx['DELTAUDRE']])
+    epsilon_fc = float(SatInfo[SatLabel][SatIdx['EPS-FC']])
+    epsilon_rrc = float(SatInfo[SatLabel][SatIdx['EPS-RRC']])
+    epsilon_ltc = float(SatInfo[SatLabel][SatIdx['EPS-LTC']])
+    epsilon_er = float(SatInfo[SatLabel][SatIdx['EPS-ER']])
+
+    # Check the data validity
+    pass
+
+    # Perform the SigmaFLT correction
+    # Computation depending on RRS flag (Root Sum Square) from MessageType10
+    if RSS_flag:
+        sigmaFLT = sum(i*i for i in [sigma_udre*delta_udre, epsilon_fc, epsilon_rrc, epsilon_ltc, epsilon_er])
+    else:
+        sigmaFLT = ((sigma_udre * delta_udre) + epsilon_fc + epsilon_rrc + epsilon_ltc + epsilon_er)**2
+
+    return sigmaFLT
 # Compute thee Satellite Corrected Position and Clock applying the SBAS FLT Corrections
 def correctSatPosClk(SatInfo, SatLabel):
     # Satellite position at TT corrected by SBAS LTC (Also corrected from Sagnac Effect. WGS84 ref)
@@ -56,6 +83,7 @@ def correctSatPosClk(SatInfo, SatLabel):
         sys.stderr.write("[WARNING][Corrections][correctSatPosClk] Null data when it should't")
 
     return (sbas_x, sbas_y, sbas_z), b_sbas
+
 
 # The most important function here
 def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
@@ -161,7 +189,7 @@ def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
 
             # If SBAS information is available for current satellite
             # (Cannot continue if for current epoch, the current satellite is
-            # not present in the Sat/Los files)
+            # not present in the Sat/Los files aka MONITORED)
             if not ((SatLabel in SatInfo) and (SatLabel in LosInfo)):
                 continue
 
@@ -182,8 +210,9 @@ def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
                 SatCorrInfo['SatClk'] = SatClk
 
                 # Compute the SigmaFLT projected into the User direction
-                # As per MOPS-DO-229D Section A.4.5.1
-                # SigmaFLT = computeSigmaFlt(Sat[Prn].SigmaUdre, Sat[Prn].DegradationParams)
+                # [T2.1.2 SAT CORRECTION AND SIGMA FLT][PETRUS-CORR-REQ-030]
+                # ----------------------------------------------------------------------
+                SatCorrInfo['SFLT'] = computeSigmaFlt(SatInfo, SatLabel)
 
                 # SCHEMATIC
 
