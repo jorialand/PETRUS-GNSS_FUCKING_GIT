@@ -39,6 +39,12 @@ def computeDtr(SatInfo, SatLabel):
     vz = float(SatInfo[SatLabel][SatIdx['VEL-Z']])
     return (-2 * np.dot([x,y,z], [vx,vy,vz]) ) / Const.SPEED_OF_LIGHT
 
+# Compute the obliquity factor Fpp for UISD & UIRE
+def computeObliquityFactorFpp(LosInfo, SatLabel):
+    return ( 1-(
+            (Const.EARTH_RADIUS * np.cos(np.deg2rad(LosInfo[SatLabel][LosIdx['ELEV']]))) /
+            (Const.EARTH_RADIUS + Const.IONO_HEIGHT) )**2 )**(-0.5)
+
 # Compute the SigmaFLT projected into the User direction
 def computeSigmaFlt(SatInfo, SatLabel):
     """
@@ -55,9 +61,6 @@ def computeSigmaFlt(SatInfo, SatLabel):
     epsilon_ltc = float(SatInfo[SatLabel][SatIdx['EPS-LTC']])
     epsilon_er = float(SatInfo[SatLabel][SatIdx['EPS-ER']])
 
-    # Check the data validity
-    pass
-
     # Perform the SigmaFLT correction
     # Computation depending on RRS flag (Root Sum Square) from MessageType10
     if RSS_flag:
@@ -66,6 +69,78 @@ def computeSigmaFlt(SatInfo, SatLabel):
         sigmaFLT = ((sigma_udre * delta_udre) + epsilon_fc + epsilon_rrc + epsilon_ltc + epsilon_er)**2
 
     return sigmaFLT
+
+# Compute the ionospheric corrections and error bounds UISD & UIRE
+def computeUISDandUIRE(LosInfo, SatLabel):
+    """
+    Applicable standards: MOPS-DO-229D Section A.4.4.10.3
+    """
+    # Checks
+    if not int(LosInfo[SatLabel][LosIdx['FLAG']]):
+        sys.stderr.write("[WARNING][Corrections][computeUISDandUIRE] Not valid computation for PA.")
+
+    # Square interpolation
+    if LosInfo[SatLabel][LosIdx['INTERP']] == 0:
+        # Compute GIVD @ IPP
+
+        # Coordinates computation
+        phi_pp = LosInfo[SatLabel][LosIdx['IPPLAT']] # IPP's latitude
+        lambda_pp = LosInfo[SatLabel][LosIdx['IPPLON']] # IPP's longitude
+
+        phi_1 = LosInfo[SatLabel][LosIdx['IGP_SW_LAT']] # According to FIGURE A-19
+        phi_2 = LosInfo[SatLabel][LosIdx['IGP_NW_LAT']]
+        lambda_1 = LosInfo[SatLabel][LosIdx['IGP_SW_LON']]
+        lambda_2 = LosInfo[SatLabel][LosIdx['IGP_SE_LON']]
+
+        delta_phi_pp = phi_pp - phi_1
+        delta_lambda_pp = lambda_pp - lambda_1
+
+        # For mid latitudes
+        if phi_pp > -85. and phi_pp < 85.:
+            x_pp = delta_lambda_pp / (lambda_2 - lambda_1)
+            y_pp = delta_phi_pp / (phi_2 - phi_1)
+        # For extreme latitudes
+        else:
+            # Did not found how to compute it, by comparing MOPS guidelines with PETRUS LOS file
+            # Assumed that we are not treating extreme latitudes
+            x_pp = delta_lambda_pp / (lambda_2 - lambda_1)
+            y_pp = delta_phi_pp / (phi_2 - phi_1)
+            sys.stderr.write("[WARNING][Corrections][computeUISDandUIRE] Found extreme IPP latitude.")
+
+        # Weighting functions
+        w_1 = x_pp * y_pp
+        w_2 = (1-x_pp) * y_pp
+        w_3 = (1-x_pp) * (1-y_pp)
+        w_4 = x_pp * (1-y_pp)
+
+        # Compute interpolated (Square) GIVD @ IPP
+
+        GIVD = sum(W_i*GIVD_i for W_i,GIVD_i in {w_1:LosInfo[SatLabel][LosIdx['GIVD_NE']],
+                                                 w_2:LosInfo[SatLabel][LosIdx['GIVD_NW']],
+                                                 w_3:LosInfo[SatLabel][LosIdx['GIVD_SW']],
+                                                 w_4:LosInfo[SatLabel][LosIdx['GIVD_SE']]}.items())
+
+        # UISD
+        Fpp = computeObliquityFactorFpp(LosInfo, SatLabel)
+        UISD = -Fpp * GIVD
+
+        # GIVE @ IPP (hay que interpolar papá)
+        GIVE = 1.
+        pass
+        UIRE = np.sqrt(Fpp ** 2 * GIVE ** 2)
+
+    # Triangle interpolation
+    else:
+        # interp_type represents the vertex of the square not used in the triangle interpolation
+        pass
+
+
+
+
+
+
+    return UISD, UIRE
+
 # Compute thee Satellite Corrected Position and Clock applying the SBAS FLT Corrections
 def correctSatPosClk(SatInfo, SatLabel):
     # Satellite position at TT corrected by SBAS LTC (Also corrected from Sagnac Effect. WGS84 ref)
@@ -198,8 +273,13 @@ def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
             # Get IPP Latitude
             SatCorrInfo["IppLat"] = float(LosInfo[SatLabel][LosIdx["IPPLAT"]])
 
-            # Check monitoring status (UDREi<12 for Service level “PA”)
-            if int(SatInfo[SatLabel][SatIdx['UDREI']]) < 12:
+            # NOTE: According to this, if one satellite has not IppLon or IppLat fields filled, this means it
+            #       is not being monitored.
+
+            # Check monitoring status (UDREi<12 for Service level “PA”) and (FLAG==1 for SL "PA")
+            is_monitored_for_PA = (int(SatInfo[SatLabel][SatIdx['UDREI']]) < 12 ) and \
+                                  (int(LosInfo[SatLabel][LosIdx['FLAG']]))
+            if is_monitored_for_PA:
                 # Apply the SBAS corrections to the satellite position and clock
                 # [T2.1.1 SAT CORRECTION AND SIGMA FLT][PETRUS-CORR-REQ-010]
                 # ----------------------------------------------------------------------
@@ -212,31 +292,20 @@ def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
                 # Compute the SigmaFLT projected into the User direction
                 # [T2.1.2 SAT CORRECTION AND SIGMA FLT][PETRUS-CORR-REQ-030]
                 # ----------------------------------------------------------------------
-                SatCorrInfo['SFLT'] = computeSigmaFlt(SatInfo, SatLabel)
+                SatCorrInfo['SigmaFlt'] = computeSigmaFlt(SatInfo, SatLabel)
 
-                # SCHEMATIC
-
-                # Compute User Ionospheric Slant Delay and Sigma
-                # UISD and UIRE can be read from LOS file, using MOPS interpolation
-                # ----------------------------------------------------------------------
                 # Compute UISD and UIRE on the IPP using MOPS interpolation
-                # Ref: MOPS-DO-229D Section A.4.4.10.3
-                # UISD, UIRE= computeUisdAndUire(Los[Prn])
+                # [T2.2 UISD & UIRE][PETRUS-CORR-REQ-050][PETRUS-CORR-REQ-070]
+                # ----------------------------------------------------------------------
+                UISD, UIRE= computeUISDandUIRE(LosInfo, SatLabel)
 
-                # Check INTERP flag in LOS file before interpolating. Two types of
-                # interpolation shall be handled: rectangular and triangular:
 
-                # SCHEMATIC
 
-                # NOTE: Check Input LOS file that gives already the GIVD and GIVE of the IGPs around the IPP.
-                # You do not need to make the selection of the IGPs around the IPP.
-                # Weight the GIVD of each IGP and apply the mapping function to compute the UISD:
-                # SCHEMATIC
-                # Weight the GIVE of each IGP and apply the mapping function to compute the Sigma UIRE:
-                # SCHEMATIC
 
-                # Compute the STD: Slant Tropo Delay and associated SigmaTROPO
-                # Refer to MOPS guidelines in Appendix A section A.4.2.4
+
+
+
+
                 # -----------------------------------------------------------------------
                 # Compute Tropospheric Mapping Function
                 # TropoMpp = computeTropoMpp(Elevation)
@@ -279,7 +348,7 @@ def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
                 # Compute the first Residual removing the geometrical range
                 # -----------------------------------------------------------------------
                 # PsrResidual = CorrPsr - GeomRange
-            # End of if Sat[Prn].Monitored:
+            # End of if int(SatInfo[SatLabel][SatIdx['UDREI']]) < 12:
 
             # Prepare output for the satellite
             CorrInfo[SatLabel] = SatCorrInfo
