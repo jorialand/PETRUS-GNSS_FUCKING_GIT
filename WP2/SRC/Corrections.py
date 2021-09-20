@@ -21,6 +21,8 @@
 #----------------------------------------------------------------------
 import sys, os
 # Add path to find all modules
+from COMMON.Iono import computeIonoMappingFunction
+
 Common = os.path.dirname(os.path.dirname(
     os.path.abspath(sys.argv[0]))) + '/COMMON'
 sys.path.insert(0, Common)
@@ -42,7 +44,7 @@ def computeDtr(SatInfo, SatLabel):
 # Compute the obliquity factor Fpp for UISD & UIRE
 def computeObliquityFactorFpp(LosInfo, SatLabel):
     return ( 1-(
-            (Const.EARTH_RADIUS * np.cos(np.deg2rad(LosInfo[SatLabel][LosIdx['ELEV']]))) /
+            (Const.EARTH_RADIUS * np.cos(np.deg2rad(float(LosInfo[SatLabel][LosIdx['ELEV']])))) /
             (Const.EARTH_RADIUS + Const.IONO_HEIGHT) )**2 )**(-0.5)
 
 # Compute the SigmaFLT projected into the User direction
@@ -79,33 +81,31 @@ def computeUISDandUIRE(LosInfo, SatLabel):
     if not int(LosInfo[SatLabel][LosIdx['FLAG']]):
         sys.stderr.write("[WARNING][Corrections][computeUISDandUIRE] Not valid computation for PA.")
 
+    interp_type = int(LosInfo[SatLabel][LosIdx['INTERP']])
     # Square interpolation
-    if LosInfo[SatLabel][LosIdx['INTERP']] == 0:
-        # Compute GIVD @ IPP
-
+    if interp_type == 0:
         # Coordinates computation
-        phi_pp = LosInfo[SatLabel][LosIdx['IPPLAT']] # IPP's latitude
-        lambda_pp = LosInfo[SatLabel][LosIdx['IPPLON']] # IPP's longitude
+        phi_pp = float(LosInfo[SatLabel][LosIdx['IPPLAT']]) # IPP's latitude
+        lambda_pp = float(LosInfo[SatLabel][LosIdx['IPPLON']]) # IPP's longitude
 
-        phi_1 = LosInfo[SatLabel][LosIdx['IGP_SW_LAT']] # According to FIGURE A-19
-        phi_2 = LosInfo[SatLabel][LosIdx['IGP_NW_LAT']]
-        lambda_1 = LosInfo[SatLabel][LosIdx['IGP_SW_LON']]
-        lambda_2 = LosInfo[SatLabel][LosIdx['IGP_SE_LON']]
+        phi_1 = float(LosInfo[SatLabel][LosIdx['IGP_SW_LAT']]) # According to FIGURE A-19
+        phi_2 = float(LosInfo[SatLabel][LosIdx['IGP_NW_LAT']])
+        lambda_1 = float(LosInfo[SatLabel][LosIdx['IGP_SW_LON']])
+        lambda_2 = float(LosInfo[SatLabel][LosIdx['IGP_SE_LON']])
 
         delta_phi_pp = phi_pp - phi_1
         delta_lambda_pp = lambda_pp - lambda_1
 
+        # x_pp & y_pp
         # For mid latitudes
         if phi_pp > -85. and phi_pp < 85.:
             x_pp = delta_lambda_pp / (lambda_2 - lambda_1)
             y_pp = delta_phi_pp / (phi_2 - phi_1)
         # For extreme latitudes
         else:
-            # Did not found how to compute it, by comparing MOPS guidelines with PETRUS LOS file
-            # Assumed that we are not treating extreme latitudes
-            x_pp = delta_lambda_pp / (lambda_2 - lambda_1)
-            y_pp = delta_phi_pp / (phi_2 - phi_1)
+            # TODO UISD & UIRE COMPUTATION FOR EXTREME LATITUDES
             sys.stderr.write("[WARNING][Corrections][computeUISDandUIRE] Found extreme IPP latitude.")
+            return 0., 0.
 
         # Weighting functions
         w_1 = x_pp * y_pp
@@ -114,31 +114,116 @@ def computeUISDandUIRE(LosInfo, SatLabel):
         w_4 = x_pp * (1-y_pp)
 
         # Compute interpolated (Square) GIVD @ IPP
+        GIVD = sum(w_i * GIVD_i for w_i,GIVD_i in {w_1:float(LosInfo[SatLabel][LosIdx['GIVD_NE']]),
+                                                 w_2:float(LosInfo[SatLabel][LosIdx['GIVD_NW']]),
+                                                 w_3:float(LosInfo[SatLabel][LosIdx['GIVD_SW']]),
+                                                 w_4:float(LosInfo[SatLabel][LosIdx['GIVD_SE']])}.items())
 
-        GIVD = sum(W_i*GIVD_i for W_i,GIVD_i in {w_1:LosInfo[SatLabel][LosIdx['GIVD_NE']],
-                                                 w_2:LosInfo[SatLabel][LosIdx['GIVD_NW']],
-                                                 w_3:LosInfo[SatLabel][LosIdx['GIVD_SW']],
-                                                 w_4:LosInfo[SatLabel][LosIdx['GIVD_SE']]}.items())
-
-        # UISD
+        # UISD - Iono Slant Delay
         Fpp = computeObliquityFactorFpp(LosInfo, SatLabel)
         UISD = -Fpp * GIVD
 
-        # GIVE @ IPP (hay que interpolar papá)
-        GIVE = 1.
-        pass
+        # GIVE @ IPP - Iono Vertical Delay Bound Error
+        GIVE = sum(w_i * GIVE_i for w_i, GIVE_i in {w_1: float(LosInfo[SatLabel][LosIdx['GIVE_NE']]),
+                                                    w_2: float(LosInfo[SatLabel][LosIdx['GIVE_NW']]),
+                                                    w_3: float(LosInfo[SatLabel][LosIdx['GIVE_SW']]),
+                                                    w_4: float(LosInfo[SatLabel][LosIdx['GIVE_SE']])}.items())
+        # UIRE - Iono Slant Delay Bound Error
         UIRE = np.sqrt(Fpp ** 2 * GIVE ** 2)
-
     # Triangle interpolation
     else:
         # interp_type represents the vertex of the square not used in the triangle interpolation
-        pass
+        # Coordinates computation
+        phi_pp = float(LosInfo[SatLabel][LosIdx['IPPLAT']]) # IPP's latitude
+        lambda_pp = float(LosInfo[SatLabel][LosIdx['IPPLON']]) # IPP's longitude
 
+        # NE North-East IGP not used
+        if interp_type == 1:
+            phi_1 = float(LosInfo[SatLabel][LosIdx['IGP_SW_LAT']])  # According to FIGURE A-20
+            phi_2 = float(LosInfo[SatLabel][LosIdx['IGP_NW_LAT']])
+            lambda_1 = float(LosInfo[SatLabel][LosIdx['IGP_SW_LON']])
+            lambda_2 = float(LosInfo[SatLabel][LosIdx['IGP_SE_LON']])
+            givd_1 = float(LosInfo[SatLabel][LosIdx['GIVD_SW']])
+            givd_2 = float(LosInfo[SatLabel][LosIdx['GIVD_SE']])
+            givd_3 = float(LosInfo[SatLabel][LosIdx['GIVD_NW']])
+            give_1 = float(LosInfo[SatLabel][LosIdx['GIVE_SW']])
+            give_2 = float(LosInfo[SatLabel][LosIdx['GIVE_SE']])
+            give_3 = float(LosInfo[SatLabel][LosIdx['GIVE_NW']])
+        # NW North-West IGP not used
+        elif interp_type == 2:
+            phi_1 = float(LosInfo[SatLabel][LosIdx['IGP_SE_LAT']])
+            phi_2 = float(LosInfo[SatLabel][LosIdx['IGP_NE_LAT']])
+            lambda_1 = float(LosInfo[SatLabel][LosIdx['IGP_SE_LON']])
+            lambda_2 = float(LosInfo[SatLabel][LosIdx['IGP_SW_LON']])
+            givd_1 = float(LosInfo[SatLabel][LosIdx['GIVD_SE']])
+            givd_2 = float(LosInfo[SatLabel][LosIdx['GIVD_NE']])
+            givd_3 = float(LosInfo[SatLabel][LosIdx['GIVD_SW']])
+            give_1 = float(LosInfo[SatLabel][LosIdx['GIVE_SE']])
+            give_2 = float(LosInfo[SatLabel][LosIdx['GIVE_NE']])
+            give_3 = float(LosInfo[SatLabel][LosIdx['GIVE_SW']])
+        # SW South-West IGP not used
+        elif interp_type == 3:
+            phi_1 = float(LosInfo[SatLabel][LosIdx['IGP_NE_LAT']])
+            phi_2 = float(LosInfo[SatLabel][LosIdx['IGP_SE_LAT']])
+            lambda_1 = float(LosInfo[SatLabel][LosIdx['IGP_NE_LON']])
+            lambda_2 = float(LosInfo[SatLabel][LosIdx['IGP_NW_LON']])
+            givd_1 = float(LosInfo[SatLabel][LosIdx['GIVD_NE']])
+            givd_2 = float(LosInfo[SatLabel][LosIdx['GIVD_NW']])
+            givd_3 = float(LosInfo[SatLabel][LosIdx['GIVD_SE']])
+            give_1 = float(LosInfo[SatLabel][LosIdx['GIVE_NE']])
+            give_2 = float(LosInfo[SatLabel][LosIdx['GIVE_NW']])
+            give_3 = float(LosInfo[SatLabel][LosIdx['GIVE_SE']])
+        # SE South-East IGP not used
+        elif interp_type == 4:
+            phi_1 = float(LosInfo[SatLabel][LosIdx['IGP_NW_LAT']])
+            phi_2 = float(LosInfo[SatLabel][LosIdx['IGP_SW_LAT']])
+            lambda_1 = float(LosInfo[SatLabel][LosIdx['IGP_NW_LON']])
+            lambda_2 = float(LosInfo[SatLabel][LosIdx['IGP_NE_LON']])
+            givd_1 = float(LosInfo[SatLabel][LosIdx['GIVD_NW']])
+            givd_2 = float(LosInfo[SatLabel][LosIdx['GIVD_SW']])
+            givd_3 = float(LosInfo[SatLabel][LosIdx['GIVD_NE']])
+            give_1 = float(LosInfo[SatLabel][LosIdx['GIVE_NW']])
+            give_2 = float(LosInfo[SatLabel][LosIdx['GIVE_SW']])
+            give_3 = float(LosInfo[SatLabel][LosIdx['GIVE_NE']])
+        else:
+            sys.stderr.write("[WARNING][Corrections][computeUISDandUIRE] Wrong interp flag.")
+            return 0., 0.
 
+        delta_phi_pp = phi_pp - phi_1
+        delta_lambda_pp = lambda_pp - lambda_1
 
+        # x_pp and y_pp
+        # For mid latitudes
+        if phi_pp > -75. and phi_pp < 75.:
+            x_pp = delta_lambda_pp / (lambda_2 - lambda_1)
+            y_pp = delta_phi_pp / (phi_2 - phi_1)
+        # For extreme latitudes
+        else:
+            # No mention for triangle interpolation in extreme latitudes in the MOPS standard
+            sys.stderr.write("[WARNING][Corrections][computeUISDandUIRE] Found extreme IPP latitude (triangle interpolation).")
+            return 0., 0.
 
+        # Weighting functions
+        w_1 = y_pp
+        w_2 = 1 - x_pp - y_pp
+        w_3 = x_pp
 
+        # Compute interpolated (Square) GIVD @ IPP
+        GIVD = sum(w_i * GIVD_i for w_i,GIVD_i in {w_1:givd_1,
+                                                   w_2:givd_2,
+                                                   w_3:givd_3}.items())
 
+        # UISD - Iono Slant Delay
+        Fpp = computeObliquityFactorFpp(LosInfo, SatLabel)
+        UISD = -Fpp * GIVD
+
+        # GIVE @ IPP - Iono Vertical Delay Bound Error
+        GIVE = sum(w_i * GIVE_i for w_i, GIVE_i in {w_1: give_1,
+                                                    w_2: give_2,
+                                                    w_3: give_3}.items())
+        # UIRE - Iono Slant Delay Bound Error
+        UIRE = np.sqrt(Fpp ** 2 * GIVE ** 2)
+K
     return UISD, UIRE
 
 # Compute thee Satellite Corrected Position and Clock applying the SBAS FLT Corrections
@@ -158,7 +243,6 @@ def correctSatPosClk(SatInfo, SatLabel):
         sys.stderr.write("[WARNING][Corrections][correctSatPosClk] Null data when it should't")
 
     return (sbas_x, sbas_y, sbas_z), b_sbas
-
 
 # The most important function here
 def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
@@ -278,7 +362,7 @@ def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
 
             # Check monitoring status (UDREi<12 for Service level “PA”) and (FLAG==1 for SL "PA")
             is_monitored_for_PA = (int(SatInfo[SatLabel][SatIdx['UDREI']]) < 12 ) and \
-                                  (int(LosInfo[SatLabel][LosIdx['FLAG']]))
+                                  (int(LosInfo[SatLabel][LosIdx['FLAG']]) == 1)
             if is_monitored_for_PA:
                 # Apply the SBAS corrections to the satellite position and clock
                 # [T2.1.1 SAT CORRECTION AND SIGMA FLT][PETRUS-CORR-REQ-010]
@@ -297,8 +381,9 @@ def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
                 # Compute UISD and UIRE on the IPP using MOPS interpolation
                 # [T2.2 UISD & UIRE][PETRUS-CORR-REQ-050][PETRUS-CORR-REQ-070]
                 # ----------------------------------------------------------------------
-                UISD, UIRE= computeUISDandUIRE(LosInfo, SatLabel)
-
+                UISD, UIRE = computeUISDandUIRE(LosInfo, SatLabel)
+                SatCorrInfo['Uisd'] = UISD
+                SatCorrInfo['SigmaUire'] = UIRE
 
 
 
