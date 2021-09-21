@@ -72,6 +72,25 @@ def computeSigmaFlt(SatInfo, SatLabel):
 
     return sigmaFLT
 
+# computeSigmaTROPO
+def computeSigmaTROPO(LosInfo,SatLabel):
+    SigmaTVE = 0.12
+    TropoMpp = computeTropoMpp(LosInfo, SatLabel)
+    return SigmaTVE * TropoMpp
+
+# Slant Tropospheric Delay
+def computeSTD(meth, LosInfo, SatLabel):
+    if meth == 'EASY':
+        return float(LosInfo[SatLabel][LosIdx['STD']])
+    elif meth == 'CHALLENGING':
+        pass
+        # STD = computeSlantTropoDelay(RCVR[iRec].llh, Doy, TropoMpp)
+
+
+# Compute the tropospheric mapping function
+def computeTropoMpp(LosInfo,SatLabel):
+    return 1.001 / np.sqrt(0.002001 + (np.sin(np.deg2rad(float(LosInfo[SatLabel][LosIdx['ELEV']]))))**2)
+
 # Compute the ionospheric corrections and error bounds UISD & UIRE
 def computeUISDandUIRE(LosInfo, SatLabel):
     """
@@ -223,7 +242,7 @@ def computeUISDandUIRE(LosInfo, SatLabel):
                                                     w_3: give_3}.items())
         # UIRE - Iono Slant Delay Bound Error
         UIRE = np.sqrt(Fpp ** 2 * GIVE ** 2)
-K
+
     return UISD, UIRE
 
 # Compute thee Satellite Corrected Position and Clock applying the SBAS FLT Corrections
@@ -378,43 +397,24 @@ def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
                 # ----------------------------------------------------------------------
                 SatCorrInfo['SigmaFlt'] = computeSigmaFlt(SatInfo, SatLabel)
 
-                # Compute UISD and UIRE on the IPP using MOPS interpolation
+                # Compute UISD and UIRE @ the IPP using MOPS interpolation
                 # [T2.2 UISD & UIRE][PETRUS-CORR-REQ-050][PETRUS-CORR-REQ-070]
                 # ----------------------------------------------------------------------
                 UISD, UIRE = computeUISDandUIRE(LosInfo, SatLabel)
                 SatCorrInfo['Uisd'] = UISD
                 SatCorrInfo['SigmaUire'] = UIRE
 
-
-
-
-
-
-
+                # Compute STD & sigmaTropo
+                # [T2.3 TROPO][PETRUS-CORR-REQ-100][PETRUS-CORR-REQ-130]
                 # -----------------------------------------------------------------------
-                # Compute Tropospheric Mapping Function
-                # TropoMpp = computeTropoMpp(Elevation)
-
-                # SCHEMATIC
-
+                # Compute the Slant Tropospheric Delay
+                SatCorrInfo['Std'] = computeSTD('EASY', LosInfo, SatLabel)
                 # Compute the Slant Tropospheric Delay Error Sigma
-                # SigmaTROPO = computeSigmaTROPO(TropoMpp)
-
-                # SCHEMATIC
-
-                # -----------------------------------------------------------------------
-                # [CHALLENGING OPTION] Compute the Slant Tropospheric Delay
-                # Note that STD can be read from LOS file, or
-                # Challenging option using MOPS Tropo Model in Appendix A.
-                # STD = computeSlantTropoDelay(RCVR[iRec].llh, Doy, TropoMpp)
-
-                # SCHEMATIC
-                # -----------------------------------------------------------------------
+                SatCorrInfo['SigmaTropo'] = computeSigmaTROPO(LosInfo, SatLabel)
 
                 # Compute User Airborne Sigma. Ref: MOPS-DO-229D Section J.2.4
-                # -----------------------------------------------------------------------
-                # Consider Maximum Signal Level when satellite elevation is greater
-                # than Conf.ELEV_NOISE_TH=20, and Minimum Signal Level otherwise
+                # [][]
+                # ----s-------------------------------------------------------------------
                 # SigmaAIR = computeSigmaAIR(Elev)
 
                 # Compute Sigma UERE by combining all Sigma contributions
