@@ -47,6 +47,30 @@ def computeObliquityFactorFpp(LosInfo, SatLabel):
             (Const.EARTH_RADIUS * np.cos(np.deg2rad(float(LosInfo[SatLabel][LosIdx['ELEV']])))) /
             (Const.EARTH_RADIUS + Const.IONO_HEIGHT) )**2 )**(-0.5)
 
+# computeSigmaAIR
+def computeSigmaAIR(SatCorrInfo, Conf):
+    """
+    Only valid for equipment class 2, 3, 4.
+    Ref: MOPS-DO-229D Section J.2.4
+    :param SatCorrInfo:
+    :param Conf:
+    :return:
+    """
+    Elev = SatCorrInfo["Elevation"]
+
+    # Sigma of the receiver multipath
+    if Elev > 2.:
+        SatCorrInfo["SigmaMultiPath"] = 0.13 + 0.53 * np.exp(-Elev/ 10.0)
+    else:
+        SatCorrInfo["SigmaMultiPath"] = 0.
+        sys.stderr.write("[WARNING][Corrections][computeSigmaAIR] Not valid SigmaMultiPath.")
+
+    # Sigma of the receiver noise + divergence
+    SatCorrInfo["SigmaNoiseDiv"] = 0.36 if SatCorrInfo["Elevation"] < Conf["ELEV_NOISE_TH"] else 0.15
+
+    # SigmaAirborne
+    return np.sqrt(SatCorrInfo["SigmaMultiPath"] ** 2 + SatCorrInfo["SigmaNoiseDiv"] ** 2)
+
 # Compute the SigmaFLT projected into the User direction
 def computeSigmaFlt(SatInfo, SatLabel):
     """
@@ -85,7 +109,6 @@ def computeSTD(meth, LosInfo, SatLabel):
     elif meth == 'CHALLENGING':
         pass
         # STD = computeSlantTropoDelay(RCVR[iRec].llh, Doy, TropoMpp)
-
 
 # Compute the tropospheric mapping function
 def computeTropoMpp(LosInfo,SatLabel):
@@ -412,16 +435,15 @@ def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
                 # Compute the Slant Tropospheric Delay Error Sigma
                 SatCorrInfo['SigmaTropo'] = computeSigmaTROPO(LosInfo, SatLabel)
 
-                # Compute User Airborne Sigma. Ref: MOPS-DO-229D Section J.2.4
-                # [][]
-                # ----s-------------------------------------------------------------------
-                # SigmaAIR = computeSigmaAIR(Elev)
+                # Compute User Airborne Sigma.
+                # [T2.4 Sigma AIRBORNE][PETRUS-CORR-REQ-110]
+                # -----------------------------------------------------------------------
+                SatCorrInfo['SigmaAirborne'] = computeSigmaAIR(SatCorrInfo, Conf)
 
                 # Compute Sigma UERE by combining all Sigma contributions
                 # Ref: MOPS-DO-229D Section J.1
                 #-----------------------------------------------------------------------
-                # SCHEMATIC
-
+                pass
                 # Corrected Measurements from previous information
                 #-----------------------------------------------------------------------
                 # CorrPsr = SmoothedL1 + SatClk - UISD - STD
