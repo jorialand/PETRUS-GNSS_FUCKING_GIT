@@ -102,6 +102,19 @@ def computeSigmaTROPO(LosInfo,SatLabel):
     TropoMpp = computeTropoMpp(LosInfo, SatLabel)
     return SigmaTVE * TropoMpp
 
+# computeSigmaUERE
+def computeSigmaUERE(SatCorrInfo):
+    """
+    Ref: MOPS-DO-229D Section J.1
+    :param SatCorrInfo:
+    :return:
+    """
+    sigmas = [SatCorrInfo['SigmaFlt'],
+              SatCorrInfo['SigmaUire'],
+              SatCorrInfo['SigmaTropo'],
+              SatCorrInfo['SigmaAirborne']]
+    return np.sqrt(sum(sigma_i ** 2 for sigma_i in sigmas))
+
 # Slant Tropospheric Delay
 def computeSTD(meth, LosInfo, SatLabel):
     if meth == 'EASY':
@@ -441,9 +454,10 @@ def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
                 SatCorrInfo['SigmaAirborne'] = computeSigmaAIR(SatCorrInfo, Conf)
 
                 # Compute Sigma UERE by combining all Sigma contributions
-                # Ref: MOPS-DO-229D Section J.1
+                # [T2.5 Sigma UERE][PETRUS-CORR-REQ-140]
                 #-----------------------------------------------------------------------
-                pass
+                SatCorrInfo['SigmaUere'] = computeSigmaUERE(SatCorrInfo)
+
                 # Corrected Measurements from previous information
                 #-----------------------------------------------------------------------
                 # CorrPsr = SmoothedL1 + SatClk - UISD - STD
