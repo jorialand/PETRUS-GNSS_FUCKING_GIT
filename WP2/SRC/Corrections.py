@@ -31,6 +31,10 @@ from COMMON import GnssConstants as Const
 from InputOutput import RcvrIdx, SatIdx, LosIdx
 import numpy as np
 
+# buildCorrectedMeas
+def buildCorrectedMeas(SatPrepro, SatCorrInfo):
+    return SatPrepro['SmoothC1'] + SatCorrInfo['SatClk'] - SatCorrInfo['Uisd'] - SatCorrInfo['Std']
+
 # Compute the clock relativistic effect
 def computeDtr(SatInfo, SatLabel):
     x = float(SatInfo[SatLabel][SatIdx['SAT-X']])
@@ -461,6 +465,7 @@ def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
                 # Corrected Measurements from previous information
                 #-----------------------------------------------------------------------
                 # CorrPsr = SmoothedL1 + SatClk - UISD - STD
+                SatCorrInfo['CorrPsr'] = buildCorrectedMeas(SatPrepro, SatCorrInfo)
 
                 # Compute the Geometrical Range
                 # -----------------------------------------------------------------------
