@@ -45,6 +45,13 @@ def computeDtr(SatInfo, SatLabel):
     vz = float(SatInfo[SatLabel][SatIdx['VEL-Z']])
     return (-2 * np.dot([x,y,z], [vx,vy,vz]) ) / Const.SPEED_OF_LIGHT
 
+# computeGeomRange
+def computeGeomRange(SatCorrInfo, Rcvr):
+    sat_pos = np.array([SatCorrInfo["SatX"], SatCorrInfo["SatY"], SatCorrInfo["SatZ"]])
+    rcvr_pos = np.array(Rcvr[RcvrIdx["XYZ"]])
+    geom_rng_vector = np.subtract(sat_pos, rcvr_pos)
+    return np.linalg.norm(geom_rng_vector), geom_rng_vector
+
 # Compute the obliquity factor Fpp for UISD & UIRE
 def computeObliquityFactorFpp(LosInfo, SatLabel):
     return ( 1-(
@@ -137,7 +144,7 @@ def computeUISDandUIRE(LosInfo, SatLabel):
     Applicable standards: MOPS-DO-229D Section A.4.4.10.3
     """
     # Checks
-    if not int(LosInfo[SatLabel][LosIdx['FLAG']]):
+    if int(LosInfo[SatLabel][LosIdx['FLAG']]) != 1:
         sys.stderr.write("[WARNING][Corrections][computeUISDandUIRE] Not valid computation for PA.")
 
     interp_type = int(LosInfo[SatLabel][LosIdx['INTERP']])
@@ -157,14 +164,14 @@ def computeUISDandUIRE(LosInfo, SatLabel):
 
         # x_pp & y_pp
         # For mid latitudes
-        if phi_pp > -85. and phi_pp < 85.:
+        if abs(phi_pp) < 85.:
             x_pp = delta_lambda_pp / (lambda_2 - lambda_1)
             y_pp = delta_phi_pp / (phi_2 - phi_1)
         # For extreme latitudes
         else:
-            # TODO UISD & UIRE COMPUTATION FOR EXTREME LATITUDES
+            y_pp = (abs(phi_pp) - 85.0) / 10.0
+            x_pp = ((lambda_pp - lambda_1) / 90.0) * (1 - 2 * y_pp) + y_pp
             sys.stderr.write("[WARNING][Corrections][computeUISDandUIRE] Found extreme IPP latitude.")
-            return 0., 0.
 
         # Weighting functions
         w_1 = x_pp * y_pp
@@ -180,7 +187,7 @@ def computeUISDandUIRE(LosInfo, SatLabel):
 
         # UISD - Iono Slant Delay
         Fpp = computeObliquityFactorFpp(LosInfo, SatLabel)
-        UISD = -Fpp * GIVD
+        UISD = Fpp * GIVD
 
         # GIVE @ IPP - Iono Vertical Delay Bound Error
         GIVE = sum(w_i * GIVE_i for w_i, GIVE_i in {w_1: float(LosInfo[SatLabel][LosIdx['GIVE_NE']]),
@@ -253,14 +260,14 @@ def computeUISDandUIRE(LosInfo, SatLabel):
 
         # x_pp and y_pp
         # For mid latitudes
-        if phi_pp > -75. and phi_pp < 75.:
+        if abs(phi_pp) < 75:
             x_pp = delta_lambda_pp / (lambda_2 - lambda_1)
             y_pp = delta_phi_pp / (phi_2 - phi_1)
         # For extreme latitudes
         else:
-            # No mention for triangle interpolation in extreme latitudes in the MOPS standard
+            y_pp = (abs(phi_pp) - 85.) / 10.
+            x_pp = ((lambda_pp - float(LosInfo[SatLabel][LosIdx['IGP_SW_LON']])) / 90.0) * (1 - 2 * y_pp) + y_pp
             sys.stderr.write("[WARNING][Corrections][computeUISDandUIRE] Found extreme IPP latitude (triangle interpolation).")
-            return 0., 0.
 
         # Weighting functions
         w_1 = y_pp
@@ -274,7 +281,7 @@ def computeUISDandUIRE(LosInfo, SatLabel):
 
         # UISD - Iono Slant Delay
         Fpp = computeObliquityFactorFpp(LosInfo, SatLabel)
-        UISD = -Fpp * GIVD
+        UISD = Fpp * GIVD
 
         # GIVE @ IPP - Iono Vertical Delay Bound Error
         GIVE = sum(w_i * GIVE_i for w_i, GIVE_i in {w_1: give_1,
@@ -302,6 +309,28 @@ def correctSatPosClk(SatInfo, SatLabel):
         sys.stderr.write("[WARNING][Corrections][correctSatPosClk] Null data when it should't")
 
     return (sbas_x, sbas_y, sbas_z), b_sbas
+
+# getSatMonitoringStatus
+def getSatMonitoringStatus(SatCorrInfo, SatInfo, SatLabel):
+    # Satellite is monitored (UDREI<14)
+    if int(SatInfo[SatLabel][SatIdx['UDREI']]) < 14:
+        # & Available for PA
+        if int(SatInfo[SatLabel][SatIdx['UDREI']]) < 12:
+            SatCorrInfo['Flag'] = 1
+        # & Available for NPA
+        else:
+            SatCorrInfo["Flag"] = 2
+    # Satellite NOT monitored (UDREI==14) or Don't Use (UDREI==15)
+    else:
+        SatCorrInfo["Flag"] = 0
+
+    # Return monitoring status
+    if SatCorrInfo['Flag'] == 1:
+        return 'PA'
+    elif SatCorrInfo['Flag'] == 2:
+        return 'NPA'
+    else:
+        return 'NotUsed'
 
 # The most important function here
 def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
@@ -408,94 +437,108 @@ def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
             # If SBAS information is available for current satellite
             # (Cannot continue if for current epoch, the current satellite is
             # not present in the Sat/Los files aka MONITORED)
-            if not ((SatLabel in SatInfo) and (SatLabel in LosInfo)):
-                continue
+            if (SatLabel in SatInfo) and (SatLabel in LosInfo):
+                # Get IPP Longitude
+                SatCorrInfo["IppLon"] = float(LosInfo[SatLabel][LosIdx["IPPLON"]])
+                # Get IPP Latitude
+                SatCorrInfo["IppLat"] = float(LosInfo[SatLabel][LosIdx["IPPLAT"]])
 
-            # Get IPP Longitude
-            SatCorrInfo["IppLon"] = float(LosInfo[SatLabel][LosIdx["IPPLON"]])
-            # Get IPP Latitude
-            SatCorrInfo["IppLat"] = float(LosInfo[SatLabel][LosIdx["IPPLAT"]])
+                # NOTE: According to this, if one satellite has not IppLon or IppLat fields filled, this means it
+                #       is not being monitored.
 
-            # NOTE: According to this, if one satellite has not IppLon or IppLat fields filled, this means it
-            #       is not being monitored.
+                # Set satellite monitoring status
+                sat_monitoring_status = getSatMonitoringStatus(SatCorrInfo, SatInfo, SatLabel)
 
-            # Check monitoring status (UDREi<12 for Service level “PA”) and (FLAG==1 for SL "PA")
-            is_monitored_for_PA = (int(SatInfo[SatLabel][SatIdx['UDREI']]) < 12 ) and \
-                                  (int(LosInfo[SatLabel][LosIdx['FLAG']]) == 1)
-            if is_monitored_for_PA:
-                # Apply the SBAS corrections to the satellite position and clock
-                # [T2.1.1 SAT CORRECTION AND SIGMA FLT][PETRUS-CORR-REQ-010]
-                # ----------------------------------------------------------------------
-                SatPos, SatClk = correctSatPosClk(SatInfo,SatLabel)
-                SatCorrInfo['SatX'] = SatPos[0]
-                SatCorrInfo['SatY'] = SatPos[1]
-                SatCorrInfo['SatZ'] = SatPos[2]
-                SatCorrInfo['SatClk'] = SatClk
+                if sat_monitoring_status == 'PA':
+                    # Apply the SBAS corrections to the satellite position and clock
+                    # [T2.1.1 SAT CORRECTION AND SIGMA FLT][PETRUS-CORR-REQ-010]
+                    # ----------------------------------------------------------------------
+                    SatPos, SatClk = correctSatPosClk(SatInfo,SatLabel)
+                    SatCorrInfo['SatX'] = SatPos[0]
+                    SatCorrInfo['SatY'] = SatPos[1]
+                    SatCorrInfo['SatZ'] = SatPos[2]
+                    SatCorrInfo['SatClk'] = SatClk
 
-                # Compute the SigmaFLT projected into the User direction
-                # [T2.1.2 SAT CORRECTION AND SIGMA FLT][PETRUS-CORR-REQ-030]
-                # ----------------------------------------------------------------------
-                SatCorrInfo['SigmaFlt'] = computeSigmaFlt(SatInfo, SatLabel)
+                    # Compute the SigmaFLT projected into the User direction
+                    # [T2.1.2 SAT CORRECTION AND SIGMA FLT][PETRUS-CORR-REQ-030]
+                    # ----------------------------------------------------------------------
+                    SatCorrInfo['SigmaFlt'] = computeSigmaFlt(SatInfo, SatLabel)
 
-                # Compute UISD and UIRE @ the IPP using MOPS interpolation
-                # [T2.2 UISD & UIRE][PETRUS-CORR-REQ-050][PETRUS-CORR-REQ-070]
-                # ----------------------------------------------------------------------
-                UISD, UIRE = computeUISDandUIRE(LosInfo, SatLabel)
-                SatCorrInfo['Uisd'] = UISD
-                SatCorrInfo['SigmaUire'] = UIRE
+                    # Compute UISD and UIRE @ the IPP using MOPS interpolation
+                    # [T2.2 UISD & UIRE][PETRUS-CORR-REQ-050][PETRUS-CORR-REQ-070]
+                    # ----------------------------------------------------------------------
+                    UISD, UIRE = computeUISDandUIRE(LosInfo, SatLabel)
+                    SatCorrInfo['Uisd'] = UISD
+                    SatCorrInfo['SigmaUire'] = UIRE
 
-                # Compute STD & sigmaTropo
-                # [T2.3 TROPO][PETRUS-CORR-REQ-100][PETRUS-CORR-REQ-130]
-                # -----------------------------------------------------------------------
-                # Compute the Slant Tropospheric Delay
-                SatCorrInfo['Std'] = computeSTD('EASY', LosInfo, SatLabel)
-                # Compute the Slant Tropospheric Delay Error Sigma
-                SatCorrInfo['SigmaTropo'] = computeSigmaTROPO(LosInfo, SatLabel)
+                    # Compute STD & sigmaTropo
+                    # [T2.3 TROPO][PETRUS-CORR-REQ-100][PETRUS-CORR-REQ-130]
+                    # -----------------------------------------------------------------------
+                    # Compute the Slant Tropospheric Delay
+                    SatCorrInfo['Std'] = computeSTD('EASY', LosInfo, SatLabel)
+                    # Compute the Slant Tropospheric Delay Error Sigma
+                    SatCorrInfo['SigmaTropo'] = computeSigmaTROPO(LosInfo, SatLabel)
 
-                # Compute User Airborne Sigma.
-                # [T2.4 Sigma AIRBORNE][PETRUS-CORR-REQ-110]
-                # -----------------------------------------------------------------------
-                SatCorrInfo['SigmaAirborne'] = computeSigmaAIR(SatCorrInfo, Conf)
+                    # Compute User Airborne Sigma.
+                    # [T2.4 Sigma AIRBORNE][PETRUS-CORR-REQ-110]
+                    # -----------------------------------------------------------------------
+                    SatCorrInfo['SigmaAirborne'] = computeSigmaAIR(SatCorrInfo, Conf)
 
-                # Compute Sigma UERE by combining all Sigma contributions
-                # [T2.5 Sigma UERE][PETRUS-CORR-REQ-140]
-                #-----------------------------------------------------------------------
-                SatCorrInfo['SigmaUere'] = computeSigmaUERE(SatCorrInfo)
+                    # Compute Sigma UERE by combining all Sigma contributions
+                    # [T2.5 Sigma UERE][PETRUS-CORR-REQ-140]
+                    #-----------------------------------------------------------------------
+                    SatCorrInfo['SigmaUere'] = computeSigmaUERE(SatCorrInfo)
 
-                # Corrected Measurements from previous information
-                #-----------------------------------------------------------------------
-                # CorrPsr = SmoothedL1 + SatClk - UISD - STD
-                SatCorrInfo['CorrPsr'] = buildCorrectedMeas(SatPrepro, SatCorrInfo)
+                    # Corrected Measurements from previous information
+                    # [T2.6 First RESIDUALS]
+                    #-----------------------------------------------------------------------
+                    SatCorrInfo['CorrPsr'] = buildCorrectedMeas(SatPrepro, SatCorrInfo)
 
-                # Compute the Geometrical Range
-                # -----------------------------------------------------------------------
-                # GeomRange = computeGeomRange(SATxyz, RCVRXYZ)
+                    # Compute the Geometrical Range
+                    # [T2.6 First RESIDUALS]
+                    # -----------------------------------------------------------------------
+                    SatCorrInfo['GeomRange'], GeomRange_vector = computeGeomRange(SatCorrInfo, Rcvr)
 
-                # Compute the first Residual removing the geometrical range
-                # -----------------------------------------------------------------------
-                # PsrResidual = CorrPsr - GeomRange
-            # End of if int(SatInfo[SatLabel][SatIdx['UDREI']]) < 12:
+                    # Compute the first Residual removing the geometrical range
+                    # [T2.6 First RESIDUALS]
+                    # -----------------------------------------------------------------------
+                    SatCorrInfo['PsrResidual'] = SatCorrInfo['CorrPsr'] - SatCorrInfo['GeomRange']
+
+                    # Compute residuals sum
+                    # [T2.7 RECEIVER CLOCK Guess][T2.8 Residuals free from Rcvr. Clock]
+                    # -----------------------------------------------------------------------
+                    Weight = 1 / (SatCorrInfo['SigmaUere'] ** 2)
+                    ResSum += Weight * SatCorrInfo['PsrResidual']
+                    ResN += 1
+
+                    # Compute ENT-GPS offset
+                    # [T2.9 ENT-GPS Offset]
+                    # -----------------------------------------------------------------------
+                    LTCxyz = np.array([float(SatInfo[SatLabel][SatIdx['LTC-X']]), (float(SatInfo[SatLabel][SatIdx['LTC-Y']])), (float(SatInfo[SatLabel][SatIdx['LTC-Z']]))])
+                    Ulos = GeomRange_vector / SatCorrInfo['GeomRange']
+                    EntGpsSum += np.dot(LTCxyz, Ulos) - (float(SatInfo[SatLabel][SatIdx['FC']]) + float(SatInfo[SatLabel][SatIdx['LTC-B']]))
+                    EntGpsN += 1
+                # End of if sat_monitoring_status == 'PA':
+            # End of if (SatLabel in SatInfo) and (SatLabel in LosInfo):
 
             # Prepare output for the satellite
             CorrInfo[SatLabel] = SatCorrInfo
 
-
         # End of if(SatPrepro["Status"] == 1):
     # End of for SatLabel, SatPrepro in PreproObsInfo.items():
 
-    # Estimate the Receiver Clock first guess as a weighted average of the Residuals # (with the weights W=1/UERE2)
-    # RcvrClk = estimateRcvrClk(PsrResidual, SigmaUERE)
-
-    # Loop over satellites at PsrResidual Output
-    # for Prn in Sat[Prn].Monitored:
-        # Correct Residual from the first guess of the Receiver Clock
-        # PsrResidual = PsrResidual - RcvrClk
-
-    # Estimate the ENT-GPS Offset as the instantaneous average of the orbit corrections
-    # #(LTC) projected into the user line-of-sight (Ulos) minus the clock corrections (FC+LTC)
-    # ENTtoGPS = estimateENTtoGPS(FLT_Corrections)
-
-    # SCHEMATIC
+    # Estimate the Receiver Clock first guess as a weighted average of the Residuals (with the weights W=1/UERE2)
+    # [T2.7 RECEIVER CLOCK Guess][T2.8 Residuals free from Rcvr. Clock]
+    # -----------------------------------------------------------------------
+    for SatLabel in CorrInfo:
+        # If SBAS information is available for current satellite
+        if (SatLabel in SatInfo) and (SatLabel in LosInfo):
+            # Receiver clock first guess
+            CorrInfo[SatLabel]["RcvrClk"] = ResSum / ResN
+            # Estimate the new residuals free from the receiver clock.
+            CorrInfo[SatLabel]["PsrResidual"] -= CorrInfo[SatLabel]["RcvrClk"]
+            # Estimate ENT to GPS Offset
+            CorrInfo[SatLabel]["EntGps"] = EntGpsSum / EntGpsN
 
     return CorrInfo
 
