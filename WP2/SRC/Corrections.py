@@ -509,7 +509,7 @@ def runCorrectMeas(Conf, Rcvr, PreproObsInfo, SatInfo, LosInfo):
                     # -----------------------------------------------------------------------
                     Weight = 1 / (SatCorrInfo['SigmaUere'] ** 2)
                     ResSum += Weight * SatCorrInfo['PsrResidual']
-                    ResN += 1
+                    ResN += Weight
 
                     # Compute ENT-GPS offset
                     # [T2.9 ENT-GPS Offset]
