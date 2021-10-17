@@ -16,7 +16,7 @@ import warnings
 import matplotlib.cbook
 warnings.filterwarnings("ignore", category=matplotlib.cbook.mplDeprecation)
 
-import PlotsConstants as Const
+import COMMON.PlotsConstants as Const
 
 def createFigure(PlotConf, Polar = 0):
     if Polar == 0:

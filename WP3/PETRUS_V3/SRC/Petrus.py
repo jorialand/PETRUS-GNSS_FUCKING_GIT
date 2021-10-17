@@ -35,11 +35,13 @@ from InputOutput import readObsEpoch
 from InputOutput import readCorrectInputs
 from InputOutput import generatePreproFile
 from InputOutput import generateCorrFile
-from InputOutput import PreproHdr, CorrHdr
+from InputOutput import generatePosFile
+from InputOutput import PreproHdr, CorrHdr, PosHdr, PerfHdr, HistHdr
 from InputOutput import CSNEPOCHS
 from InputOutput import ObsIdx
 from Preprocessing import runPreProcMeas
 from Corrections import runCorrectMeas
+from Spvt import computeSpvtSolution
 from COMMON.Dates import convertJulianDay2YearMonthDay
 from COMMON.Dates import convertYearMonthDay2Doy
 
@@ -131,6 +133,30 @@ for Rcvr in RcvrInfo.keys():
 
             # Create output file
             fcorr = createOutputFile(CorrFile, CorrHdr)
+
+        # If Position outputs are activated
+        if Conf["SPVT_OUT"] == 1:
+            # Define the full path and name to the output POS file
+            PosFile = Scen + '/OUT/SPVT/' + "POS_%s_Y%02dD%03d.dat" % (Rcvr, Year % 100, Doy)
+
+            # Create output file
+            fpos = createOutputFile(PosFile, PosHdr)
+
+        # If Performances outputs are activated
+        if Conf["PERF_OUT"] == 1:
+            # Define the full path and name to the output PERF file
+            PerfFile = Scen + '/OUT/PERF/' + "PERF_%s_Y%02dD%03d.dat" % (Rcvr, Year % 100, Doy)
+
+            # Create output file
+            fperf = createOutputFile(PerfFile, PerfHdr)
+
+        # If LPV200 VPE Histogram outputs are activated
+        if Conf["VPEHIST_OUT"] == 1:
+            # Define the full path and name to the output HIST file
+            HistFile = Scen + '/OUT/PERF/' + "VPE_HIST_%s_Y%02dD%03d.dat" % (Rcvr, Year % 100, Doy)
+
+            # Create output file
+            fhist = createOutputFile(HistFile, HistHdr)
 
         # Define the full path and name to the SAT file to read and open the file
         SatFile = Scen + \
@@ -224,6 +250,21 @@ int(Conf["MIN_NCS_TH"][CSNEPOCHS]),  # Number of consecutive epochs for CS
                             # Generate output file
                             generateCorrFile(fcorr, CorrInfo)
 
+                        # Compute spvt solution and intermediate performances
+                        # ----------------------------------------------------------
+                        # PA - Precision Approach mode activated
+                        PosInfo = computeSpvtSolution(Conf, RcvrInfo[Rcvr], CorrInfo, Mode = "PA")
+
+                        # If Position information available
+                        if len(PosInfo) > 0:
+                            # Compute intermediate performances for PA service
+                            pass
+
+                            # If SPVT outputs are requested
+                            if Conf["SPVT_OUT"] == 1:
+                                # Generate output file
+                                generatePosFile(fpos, PosInfo, Rcvr)
+
                 # End if ObsInfo != []:
                 else:
                     EndOfFile = True
@@ -257,6 +298,26 @@ int(Conf["MIN_NCS_TH"][CSNEPOCHS]),  # Number of consecutive epochs for CS
 
             # Generate CORR plots
             # generateCorrPlots(CorrFile, SatFile, RcvrInfo[Rcvr])
+
+        # If SPVT outputs are requested
+        if Conf["SPVT_OUT"] == 1:
+            # Close POS output file
+            fpos.close()
+
+            # Display Message
+            print("INFO: Reading file: %s and generating POS figures..." % PosFile)
+
+            # Generate POS plots
+            # PA - Precision approach service
+            # generatePosPlots(PosFile, Mode = "PA")
+
+        # If PERF outputs are requested
+        if Conf["PERF_OUT"] == 1:
+            pass
+
+        # If LPV200 VPE Histogram outputs are requested
+        if Conf["VPEHIST_OUT"] == 1:
+            pass
 
         # Close input files
         fsat.close()

@@ -177,3 +177,11 @@ MAX_NUM_USRS = 1000
 
 # Maximum number of Receivers in RCVR (dimensioning constant)
 MAX_NUM_RCVR = 1000
+
+
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# OTHER CONSTANTS
+#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+# HISTOGRAM BIN RESOLUTION
+HIST_RES = 0.001

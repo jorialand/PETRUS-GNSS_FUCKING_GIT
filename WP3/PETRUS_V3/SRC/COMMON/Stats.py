@@ -1,5 +1,6 @@
+
 from collections import OrderedDict
-from numpy import sqrt
+from math import sqrt
 from scipy.special import erfinv
 
 def updateMin(CurrentMin, Value):
@@ -21,17 +22,28 @@ def computeCdfFromHistogram(Histogram, NSamples):
     SortedHist = OrderedDict({})
     for key in sorted(Histogram.keys()):
         SortedHist[key] = Histogram[key]
+    # Define internal variables
     Cdf = OrderedDict({})
+    Sigmas = OrderedDict({})
     CumulatedSamples = 0
     for Bin, Samples in SortedHist.items():
         CumulatedSamples = CumulatedSamples + Samples
+        # Compute Cdf
         Cdf[Bin] = float(CumulatedSamples) / NSamples
+        # Compute Sigmas
+        Sigmas[Bin] = float(Bin/(sqrt(2)*erfinv(Cdf[Bin])))
 
-    return Cdf
+    return Cdf, Sigmas
 
 def computePercentile(Cdf, Percentile):
     for Bin, Freq in Cdf.items():
         if (Freq * 100) > Percentile:
             return Bin
 
-    return Cdf
+def computeOverbound(Sigmas, ThresholdBin):
+    SigmaOver = 0.0
+    for Bin, Sigma in Sigmas.items():
+        if Bin >= ThresholdBin:
+            SigmaOver = updateMax(SigmaOver, Sigma)
+
+    return SigmaOver
