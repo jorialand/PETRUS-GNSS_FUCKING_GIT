@@ -138,6 +138,9 @@ APVI_HAL = 40
 # APV-I Vertical Alarm Limit (VAL) req [m]
 APVI_VAL = 50
 
+LPV200_HAL = 40
+LPV200_VAL = 35
+
 # Minimum of longitudes [deg]
 MIN_LON = -180.0
 

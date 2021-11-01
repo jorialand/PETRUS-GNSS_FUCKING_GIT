@@ -12,7 +12,7 @@ from COMMON.Wlsq import wlsqComputation
 import numpy as np
 
 # The most relevant function here
-def computeSpvtSolution(Conf, RcvrInfo, CorrInfo, Mode):
+def computeSpvtSolution(Conf, RcvrInfo, CorrInfo):
     """
     Objective: Compute the SBAS PVT Solution.
 
@@ -32,7 +32,6 @@ def computeSpvtSolution(Conf, RcvrInfo, CorrInfo, Mode):
     :param Conf: Config info
     :param RcvrInfo: Receiver info
     :param CorrInfo: Corrected Measurements for current epoch
-    :param Mode: Service Level (e.g. PA - Precision Approach)
     :return: PosInfo, position info for current epoch
     """
 
@@ -108,14 +107,29 @@ def computeSpvtSolution(Conf, RcvrInfo, CorrInfo, Mode):
                 # Compute the S matrix
                 SMatrix = buildSMatrix(GMatrix, WMatrix)
                 # Call WLSQ function
-                wlsqComputation(Conf, CorrInfo, PosInfo, SMatrix, Mode)
+                wlsqComputation(Conf, CorrInfo, PosInfo, SMatrix)
                 # Compute protection levels
-                computeProtectionLevels(GMatrix, WMatrix, PosInfo, Mode)
+                computeProtectionLevels(GMatrix, WMatrix, PosInfo)
                 # Compute safety indexes
-                PosInfo["Hsi"] = PosInfo["Hpe"] / PosInfo["Hpl"]
-                PosInfo["Vsi"] = PosInfo["Vpe"] / PosInfo["Vpl"]
+                computeSafetyIndexes(PosInfo)
+
+                # Set spvt computed as PA solution ---- Better do it within the wlsq solver
+                # PosInfo['Sol'] = 1
+
+            else:
+                # No spvt solution
+                PosInfo['Sol'] = 0
+        else:
+            # No spvt solution
+            PosInfo['Sol'] = 0
 
     return PosInfo
+
+
+def computeSafetyIndexes(PosInfo):
+    PosInfo["Hsi"] = PosInfo["Hpe"] / PosInfo["Hpl"]
+    PosInfo["Vsi"] = PosInfo["Vpe"] / PosInfo["Vpl"]
+
 
 def buildWMatrix(SatCorrInfo):
     """
@@ -174,5 +188,21 @@ def computeDops(GMatrix, PosInfo):
     PosInfo["Pdop"] = np.sqrt(QDiag[0] + QDiag[1] + QDiag[2])
     PosInfo["Tdop"] = np.sqrt(QDiag[3])
 
-def computeProtectionLevels(GMatrix, WMatrix, PosInfo, Mode):
-    pass
+def computeProtectionLevels(GMatrix, WMatrix, PosInfo):
+    """
+    Computes the EGNOS protection levels
+    Ref Sys: ENU
+    :param GMatrix:
+    :param WMatrix:
+    :param PosInfo:
+    :return:
+    """
+
+    # D Matrix
+    DMatrix = np.linalg.inv(np.linalg.multi_dot([GMatrix.T, WMatrix, GMatrix]))
+    DMatrix_diag1 = np.diag(DMatrix)
+    DMatrix_diag2 = np.diag(DMatrix, k = 1)
+
+    # Compute the protection levels (PA service)
+    PosInfo["Hpl"] = np.sqrt(((DMatrix_diag1[0] + DMatrix_diag1[1])/2) + np.sqrt(((DMatrix_diag1[0] - DMatrix_diag1[1])/2)**2 + DMatrix_diag2[0]**2))*GnssConstants.MOPS_KH_PA
+    PosInfo["Vpl"] = np.sqrt(DMatrix_diag1[2])*GnssConstants.MOPS_KV_PA

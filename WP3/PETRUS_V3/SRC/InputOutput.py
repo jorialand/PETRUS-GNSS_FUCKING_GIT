@@ -1499,4 +1499,112 @@ def generateCorrFile(fcorr, CorrInfo):
 # End of generatePreproFile
 
 def generatePosFile(fpos, PosInfo, Rcvr):
-    pass
+    """
+    Writes the PosInfo dict to a file
+    :param fpos:
+    :param PosInfo:
+    :param Rcvr:
+    :return:
+    """
+
+    # Parse PosInfo inputs
+    Outputs = OrderedDict({})
+    Outputs["SOD"] = PosInfo["Sod"]
+    Outputs["DOY"] = PosInfo["Doy"]
+    Outputs["RCVR"] = Rcvr
+    Outputs["LON"] = PosInfo["Lon"]
+    Outputs["LAT"] = PosInfo["Lat"]
+    Outputs["ALT"] = PosInfo["Alt"]
+    Outputs["CLK"] = PosInfo["Clk"]
+    Outputs["SOL"] = PosInfo["Sol"]
+    Outputs["NSV"] = PosInfo["NumSatVis"]
+    Outputs["NSV-SOL"] = PosInfo["NumSatSol"]
+    Outputs["HPE"] = PosInfo["Hpe"]
+    Outputs["VPE"] = PosInfo["Vpe"]
+    Outputs["EPE"] = PosInfo["Epe"]
+    Outputs["NPE"] = PosInfo["Npe"]
+    Outputs["HPL"] = PosInfo["Hpl"]
+    Outputs["VPL"] = PosInfo["Vpl"]
+    Outputs["HSI"] = PosInfo["Hsi"]
+    Outputs["VSI"] = PosInfo["Vsi"]
+    Outputs["HDOP"] = PosInfo["Hdop"]
+    Outputs["VDOP"] = PosInfo["Vdop"]
+    Outputs["PDOP"] = PosInfo["Pdop"]
+    Outputs["TDOP"] = PosInfo["Tdop"]
+
+    # Write to file
+    for i, result in enumerate(Outputs):
+        fpos.write(((PosFmt[i] + " ") % Outputs[result]))
+
+    fpos.write("\n")
+
+def generatePerfFile(fperf, PerfInfoSer):
+    """
+    Writes the PerfInfo dict to a file
+    :param fperf:
+    :param PerfInfoSer:
+    :return:
+    """
+
+    # Prepare outputs
+    Outputs = OrderedDict({})
+    Outputs["RCVR"] = PerfInfoSer["Rcvr"]
+    Outputs["LON"] = PerfInfoSer["Lon"]
+    Outputs["LAT"] = PerfInfoSer["Lat"]
+    Outputs["DOY"] = PerfInfoSer["Doy"]
+    Outputs["SERVICE"] = PerfInfoSer["Service"]
+    Outputs["SAMSOL"] = PerfInfoSer["SamSol"]
+    Outputs["SAMNOSOL"] = PerfInfoSer["SamNoSol"]
+    Outputs["AVAIL"] = PerfInfoSer["Avail"]
+    Outputs["CONTRISK"] = PerfInfoSer["ContRisk"]
+    Outputs["NOTAVAIL"] = PerfInfoSer["NotAvail"]
+    Outputs["NSVMIN"] = PerfInfoSer["NsvMin"]
+    Outputs["NSVMAX"] = PerfInfoSer["NsvMax"]
+    Outputs["HPERMS"] = PerfInfoSer["HpeRms"]
+    Outputs["VPERMS"] = PerfInfoSer["VpeRms"]
+    Outputs["HPE95"] = PerfInfoSer["Hpe95"]
+    Outputs["VPE95"] = PerfInfoSer["Vpe95"]
+    Outputs["HPEMAX"] = PerfInfoSer["HpeMax"]
+    Outputs["VPEMAX"] = PerfInfoSer["VpeMax"]
+    Outputs["EXTVPE"] = PerfInfoSer["ExtVpe"]
+    Outputs["HPLMIN"] = PerfInfoSer["HplMin"]
+    Outputs["VPLMIN"] = PerfInfoSer["VplMin"]
+    Outputs["HPLMAX"] = PerfInfoSer["HplMax"]
+    Outputs["VPLMAX"] = PerfInfoSer["VplMax"]
+    Outputs["HSIMAX"] = PerfInfoSer["HsiMax"]
+    Outputs["VSIMAX"] = PerfInfoSer["VsiMax"]
+    Outputs["NMI"] = PerfInfoSer["Nmi"]
+    Outputs["NHMI"] = PerfInfoSer["Nhmi"]
+    Outputs["PDOPMAX"] = PerfInfoSer["PdopMax"]
+    Outputs["HDOPMAX"] = PerfInfoSer["HdopMax"]
+    Outputs["VDOPMAX"] = PerfInfoSer["VdopMax"]
+
+    # Write line
+    for i, result in enumerate(Outputs):
+        fperf.write(((PerfFmt[i] + " ") % Outputs[result]))
+
+    fperf.write("\n")
+
+def generateHistFile(fhist, VpeHistInfo):
+    """
+    Writes the histogram for LPV200 service level.
+    :param fhist:
+    :param VpeHistInfo:
+    :return:
+    """
+
+    # Parse inputs
+    Outputs = OrderedDict({})
+    Outputs["RCVR"] = VpeHistInfo["Rcvr"]
+    Outputs["SERVICE"] = VpeHistInfo["Service"]
+    Outputs["BINID"] = VpeHistInfo["BinId"]
+    Outputs["BINMIN"] = VpeHistInfo["BinMin"]
+    Outputs["BINMAX"] = VpeHistInfo["BinMax"]
+    Outputs["NUMSAM"] = VpeHistInfo["BinNumSam"]
+    Outputs["BINFREQ"] = VpeHistInfo["BinFreq"]
+
+    # Write to file
+    for i, result in enumerate(Outputs):
+        fhist.write(((HistFmt[i] + " ") % Outputs[result]))
+
+    fhist.write("\n")

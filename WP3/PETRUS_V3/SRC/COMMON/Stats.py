@@ -3,17 +3,16 @@ from collections import OrderedDict
 from math import sqrt
 from scipy.special import erfinv
 
-def updateMin(CurrentMin, Value):
+def UpdateMin(CurrentMin, Value):
     return min(CurrentMin, Value)
 
-def updateMax(CurrentMax, Value):
+def UpdateMax(CurrentMax, Value):
     return max(CurrentMax, Value)
 
-def updateHist(Hist, Value, Resolution):
+def UpdateHist(Hist, Value, Resolution):
     Bin = float(int(Value/Resolution)) * Resolution
     if Bin in Hist:
         Hist[Bin] = Hist[Bin] + 1
-
     else:
         Hist[Bin] = 1
 
@@ -44,6 +43,6 @@ def computeOverbound(Sigmas, ThresholdBin):
     SigmaOver = 0.0
     for Bin, Sigma in Sigmas.items():
         if Bin >= ThresholdBin:
-            SigmaOver = updateMax(SigmaOver, Sigma)
+            SigmaOver = UpdateMax(SigmaOver, Sigma)
 
     return SigmaOver

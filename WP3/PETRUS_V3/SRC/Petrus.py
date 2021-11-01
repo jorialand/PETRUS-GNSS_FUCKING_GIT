@@ -33,17 +33,19 @@ from InputOutput import createOutputFile
 from InputOutput import openInputFile
 from InputOutput import readObsEpoch
 from InputOutput import readCorrectInputs
-from InputOutput import generatePreproFile
-from InputOutput import generateCorrFile
-from InputOutput import generatePosFile
+from InputOutput import generatePreproFile, generateCorrFile, generatePosFile, generatePerfFile
 from InputOutput import PreproHdr, CorrHdr, PosHdr, PerfHdr, HistHdr
 from InputOutput import CSNEPOCHS
 from InputOutput import ObsIdx
 from Preprocessing import runPreProcMeas
 from Corrections import runCorrectMeas
 from Spvt import computeSpvtSolution
+from Perf import initializePerfInfo, UpdatePerfEpoch, computeFinalPerf, computeVpeHist
 from COMMON.Dates import convertJulianDay2YearMonthDay
 from COMMON.Dates import convertYearMonthDay2Doy
+from PosPlots import generatePosPlots
+from PerfPlots import generateHistPlot, generatePerfPlots
+
 
 #----------------------------------------------------------------------
 # INTERNAL FUNCTIONS
@@ -84,6 +86,16 @@ RcvrInfo = readRcvr(RcvrFile)
 print( '------------------------------------')
 print( '--> RUNNING PETRUS:')
 print( '------------------------------------')
+
+# Performance plots
+PerfFilesList = []
+
+
+def PrintProgress():
+    progress = Sod / 86400 * 100
+    if progress % 5 == 0:
+        print(f'Progress: {progress:.0f}%')
+
 
 # Loop over RCVRs
 #-----------------------------------------------------------------------
@@ -197,6 +209,10 @@ int(Conf["MIN_NCS_TH"][CSNEPOCHS]),  # Number of consecutive epochs for CS
             "PrevRej": 0,            # Previous Rejection flag
                                      # ...
         } # End of SatPreproObsInfo
+        Services = ["OS", "APVI", "LPV200", "CATI", "NPA", "MARITIME", "CUSTOM"]
+        PerfInfo = OrderedDict({})
+        VpeHistInfo = OrderedDict({})
+        initializePerfInfo(Conf, Services, Rcvr, RcvrInfo[Rcvr], Doy, PerfInfo, VpeHistInfo)
         SodInputs = -1
 
         # Open OBS file
@@ -229,7 +245,7 @@ int(Conf["MIN_NCS_TH"][CSNEPOCHS]),  # Number of consecutive epochs for CS
 
                     # Get SoD
                     Sod = int(float(ObsInfo[0][ObsIdx["SOD"]]))
-
+                    PrintProgress()
                     # The rest of te analyses are executed every configured sampling rate
                     if(Sod % Conf["SAMPLING_RATE"] == 0):
                         # Check if SoD have not already been read
@@ -253,12 +269,14 @@ int(Conf["MIN_NCS_TH"][CSNEPOCHS]),  # Number of consecutive epochs for CS
                         # Compute spvt solution and intermediate performances
                         # ----------------------------------------------------------
                         # PA - Precision Approach mode activated
-                        PosInfo = computeSpvtSolution(Conf, RcvrInfo[Rcvr], CorrInfo, Mode = "PA")
+                        PosInfo = computeSpvtSolution(Conf, RcvrInfo[Rcvr], CorrInfo)
 
                         # If Position information available
                         if len(PosInfo) > 0:
                             # Compute intermediate performances for PA service
-                            pass
+                            for Service, PerfInfoSer in PerfInfo.items():
+                                if Service != "NPA":
+                                    UpdatePerfEpoch(Conf, Service, PosInfo, PerfInfoSer)
 
                             # If SPVT outputs are requested
                             if Conf["SPVT_OUT"] == 1:
@@ -275,7 +293,20 @@ int(Conf["MIN_NCS_TH"][CSNEPOCHS]),  # Number of consecutive epochs for CS
     
         # End of with open(ObsFile, 'r') as f:
 
-        # If PREPRO outputs are requested
+        # Final Performances Computation
+        # ----------------------------------------------------------
+        for Service, PerfInfoSer in PerfInfo.items():
+            computeFinalPerf(PerfInfoSer)
+
+            # If PERF outputs are requested
+            if Conf["PERF_OUT"] == 1:
+                # Generate output file
+                generatePerfFile(fperf, PerfInfoSer)
+
+        # Output files & Plotting
+        # ----------------------------------------------------------
+
+        # If PREPRO outputs are requested [NOT IMPLEMENTED]
         if Conf["PREPRO_OUT"] == 1:
             # Close PREPRO output file
             fpreprobs.close()
@@ -287,7 +318,7 @@ int(Conf["MIN_NCS_TH"][CSNEPOCHS]),  # Number of consecutive epochs for CS
             # # Generate Preprocessing plots
             # generatePreproPlots(PreproObsFile)
 
-        # If CORR outputs are requested
+        # If CORR outputs are requested [NOT IMPLEMENTED]
         if Conf["CORR_OUT"] == 1:
             # Close CORR output file
             fcorr.close()
@@ -309,15 +340,31 @@ int(Conf["MIN_NCS_TH"][CSNEPOCHS]),  # Number of consecutive epochs for CS
 
             # Generate POS plots
             # PA - Precision approach service
-            # generatePosPlots(PosFile, Mode = "PA")
+            generatePosPlots(PosFile)
 
         # If PERF outputs are requested
         if Conf["PERF_OUT"] == 1:
-            pass
+            print('\n------------------------------------')
+            print("INFO: Reading PerfFilesList and generating PERF figures for all receivers...")
+            fperf.close()
+            PerfFilesList.append(PerfFile)
 
         # If LPV200 VPE Histogram outputs are requested
         if Conf["VPEHIST_OUT"] == 1:
-            pass
+            if "LPV200" not in PerfInfo.keys():
+                sys.stderr.write("ERROR: Please activate LPV200 service level for LPV200 VPE histogram computation \n")
+                sys.exit(1)
+
+            computeVpeHist(fhist, PerfInfo["LPV200"], VpeHistInfo)
+
+            # Close PERF output file
+            fhist.close()
+
+            # Display Message
+            print("INFO: Reading file: %s and generating VPE Histogram..." % HistFile)
+
+            # Generate VPE Histogram plots
+            generateHistPlot(PerfInfo["LPV200"]["ExtVpe"], HistFile)
 
         # Close input files
         fsat.close()
@@ -331,6 +378,13 @@ print( '\n------------------------------------')
 print( '--> END OF PETRUS ANALYSIS')
 print( '------------------------------------')
 
+if Conf["PERF_OUT"] == 1:
+    print( '\n------------------------------------')
+    print("INFO: Reading PerfFilesList and generating PERF figures for all receivers...")
+
+    # Generate PERF plots
+    for Service in PerfInfo.keys():
+        generatePerfPlots(Service, PerfFilesList)
 
 #######################################################
 # End of Petrus.py

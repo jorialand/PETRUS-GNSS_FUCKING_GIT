@@ -203,8 +203,8 @@ def generateLinesPlot(PlotConf):
             PlotConf["Marker"],
             linewidth = LineWidth,
             markersize = LineWidth,
-            alpha=Alpha,
-            c = PlotConf["Color"][Label])
+            alpha=Alpha)#,
+            # c = PlotConf["Color"][Label])
 
     for key in PlotConf:
         if key == "Legend" and PlotConf[key] == 1:
@@ -314,7 +314,7 @@ def generateStatsPlot(PlotConf):
     plt.close('all')
 
 def generatePlot(PlotConf):
-    if(PlotConf["Type"] == "Lines"):
+    if(PlotConf["Type"] in ["Lines", 'Map']):
         generateLinesPlot(PlotConf)
     
     if(PlotConf["Type"] == "Polar"):
