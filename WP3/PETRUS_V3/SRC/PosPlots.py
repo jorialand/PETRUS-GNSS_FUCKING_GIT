@@ -167,7 +167,7 @@ def plotHorizontalPE(PosFile, PosData, Sol):
     PlotConf["ColorBarLabel"] = "HDOP"
     PlotConf["ColorBarMin"] = min(sorted(PosData[PosIdx["HDOP"]]))
     PlotConf["ColorBarMax"] = max(sorted(PosData[PosIdx["HDOP"]]))
-    # PlotConf["ColorBarTicks"] = None
+    PlotConf["ColorBarTicks"] = None
     # PlotConf['ColorBarTicks'] = range(int(PlotConf['ColorBarMin']), int(PlotConf['ColorBarMin']) + 1)
     # Plotting
     PlotConf["xData"] = {}
@@ -216,11 +216,11 @@ def plotSafeIndex(PosFile, PosData, Sol):
     generatePlot(PlotConf)
 
 
-# Plot Horizontal Standford Diagram
+# Plot Horizontal Stanford Diagram
 def plotHorStand(PosFile, PosData, Sol):
     # Graph settings definition
     PlotConf = {}
-    initPlot(PosFile, PlotConf, "Horizontal Standford Diagram", "HOR_STANDFORD_DIAGRAM", Sol[0])
+    initPlot(PosFile, PlotConf, "Horizontal Stanford Diagram", "HOR_STANDFORD_DIAGRAM", Sol[0])
 
     PlotConf["Type"] = "Lines"
     PlotConf["FigSize"] = (8.4, 7.6)
@@ -256,7 +256,7 @@ def plotHorStand(PosFile, PosData, Sol):
     PlotConf["ColorBarLabel"] = "Point Density (Number of Samples : " + str(len(Hpe)) + ")"
     PlotConf["ColorBarMin"] = min(ZData)
     PlotConf["ColorBarMax"] = max(ZData)
-    # PlotConf["ColorBarTicks"] = None
+    PlotConf["ColorBarTicks"] = None
 
     # Plotting
     PlotConf["xData"] = {}
@@ -271,11 +271,11 @@ def plotHorStand(PosFile, PosData, Sol):
     generatePlot(PlotConf)
 
 
-# Plot Vertical Standford Diagram
+# Plot Vertical Stanford Diagram
 def plotVerStand(PosFile, PosData, Sol):
     # Graph settings definition
     PlotConf = {}
-    initPlot(PosFile, PlotConf, "Vertical Standford Diagram", "VER_STANDFORD_DIAGRAM", Sol[0])
+    initPlot(PosFile, PlotConf, "Vertical Stanford Diagram", "VER_STANDFORD_DIAGRAM", Sol[0])
 
     PlotConf["Type"] = "Lines"
     PlotConf["FigSize"] = (8.4, 7.6)
@@ -311,7 +311,7 @@ def plotVerStand(PosFile, PosData, Sol):
     PlotConf["ColorBarLabel"] = "Point Density (Number of Samples : " + str(len(Vpe)) + ")"
     PlotConf["ColorBarMin"] = min(ZData)
     PlotConf["ColorBarMax"] = max(ZData)
-    # PlotConf["ColorBarTicks"] = None
+    PlotConf["ColorBarTicks"] = None
 
     # Plotting
     PlotConf["xData"] = {}
@@ -395,26 +395,26 @@ def generatePosPlots(PosFile):
         # Configure plot and call plot generation function
         plotSafeIndex(PosFile, PosData, Sol)
 
-    # HORIZONTAL STANDFORD DIAGRAM
+    # HORIZONTAL Stanford DIAGRAM
     # ----------------------------------------------------------
     if (ConfPos["PLOT_HOR_STANDFORD"] == 1):
         # Read the cols we need from PosFile file
         PosData = read_csv(PosFile, delim_whitespace=True, skiprows=1, header=None, \
                            usecols=[PosIdx["HPE"], PosIdx["HPL"], PosIdx["SOL"]])
 
-        print('Plot Horizontal Standford Diagram in ' + Sol[0] + ' mode...')
+        print('Plot Horizontal Stanford Diagram in ' + Sol[0] + ' mode...')
 
         # Configure plot and call plot generation function
         plotHorStand(PosFile, PosData, Sol)
 
-    # VERTICAL STANDFORD DIAGRAM
+    # VERTICAL Stanford DIAGRAM
     # ----------------------------------------------------------
     if (ConfPos["PLOT_VER_STANDFORD"] == 1):
         # Read the cols we need from PosFile file
         PosData = read_csv(PosFile, delim_whitespace=True, skiprows=1, header=None, \
                            usecols=[PosIdx["VPE"], PosIdx["VPL"], PosIdx["SOL"]])
 
-        print('Plot Vertical Standford Diagram in ' + Sol[0] + ' mode...')
+        print('Plot Vertical Stanford Diagram in ' + Sol[0] + ' mode...')
 
         # Configure plot and call plot generation function
         plotVerStand(PosFile, PosData, Sol)

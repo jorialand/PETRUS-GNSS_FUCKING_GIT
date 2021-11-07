@@ -18,32 +18,27 @@ warnings.filterwarnings("ignore", category=matplotlib.cbook.mplDeprecation)
 
 import COMMON.PlotsConstants as Const
 
-def createFigure(PlotConf, Polar = 0):
-    if Polar == 0:
-        if "FigSize" in PlotConf:
-            fig, ax = plt.subplots(1, 1, figsize = PlotConf["FigSize"])
-        
-        else:
-            fig, ax = plt.subplots(1, 1)
-
-    else:
-        if "FigSize" in PlotConf:
-            fig = plt.figure(figsize = PlotConf["FigSize"])
-            ax = fig.add_subplot(111, polar=True)
-
-        else:
-            fig = plt.figure()
-            ax = fig.add_subplot(111, polar=True)
-
-    return fig, ax
 
 def saveFigure(fig, Path):
     Dir = os.path.dirname(Path)
     try:
         os.makedirs(Dir)
-    except: pass
+    except:
+        pass
+    fig.savefig(Path, dpi=150., bbox_inches='tight')
 
-    fig.savefig(Path, dpi=200., bbox_inches='tight')
+
+def createFigure(PlotConf):
+    # Delete previous opened figures, to avoid performance issues
+    plt.close('all')
+    try:
+        fig, ax = plt.subplots(1, 1, figsize=PlotConf["FigSize"])
+
+    except:
+        fig, ax = plt.subplots(1, 1)
+
+    return fig, ax
+
 
 def prepareAxis(PlotConf, ax):
     for key in PlotConf:
@@ -60,7 +55,7 @@ def prepareAxis(PlotConf, ax):
 
                 if key == axis + "TicksLabels":
                     ax.set_xticklabels(PlotConf[axis + "TicksLabels"])
-                
+
                 if key == axis + "Lim":
                     ax.set_xlim(PlotConf[axis + "Lim"])
 
@@ -73,20 +68,15 @@ def prepareAxis(PlotConf, ax):
 
                 if key == axis + "TicksLabels":
                     ax.set_yticklabels(PlotConf[axis + "TicksLabels"])
-                
+
                 if key == axis + "Lim":
                     ax.set_ylim(PlotConf[axis + "Lim"])
 
         if key == "Grid" and PlotConf[key] == True:
             ax.grid(linestyle='--', linewidth=0.5, which='both')
 
-    try:
-        ax.get_yaxis().get_major_formatter().set_useOffset(False)
-        ax.get_yaxis().get_major_formatter().set_scientific(False)
-    except:
-        pass
 
-def prepareColorBar(PlotConf, ax, Values, Polar = 0):
+def prepareColorBar(PlotConf, ax, Values):
     try:
         Min = PlotConf["ColorBarMin"]
     except:
@@ -103,54 +93,41 @@ def prepareColorBar(PlotConf, ax, Values, Polar = 0):
         Max = max(Maxs)
     normalize = mpl.cm.colors.Normalize(vmin=Min, vmax=Max)
 
-    if Polar==0:
-        divider = make_axes_locatable(ax)
-
-        color_ax = divider.append_axes("right", size="3%", pad="2%")
-
-    else:
-        color_ax, kwargs = mpl.colorbar.make_axes(ax, orientation="vertical", pad=0.05, fraction=0.05)
-    
+    divider = make_axes_locatable(ax)
+    # size of the plot and gap of pad from the plot
+    color_ax = divider.append_axes("right", size="3%", pad="2%")
     cmap = mpl.cm.get_cmap(PlotConf["ColorBar"])
-    
-    if "ColorBarTicks" in PlotConf:
-        cbar = mpl.colorbar.ColorbarBase(color_ax, 
-        cmap=cmap,
-        norm=mpl.colors.BoundaryNorm(PlotConf["ColorBarTicks"], cmap.N),
-        label=PlotConf["ColorBarLabel"],
-        ticks=PlotConf["ColorBarTicks"])
-
-    else:
-        cbar = mpl.colorbar.ColorbarBase(color_ax, 
-        cmap=cmap,
-        norm=mpl.colors.Normalize(vmin=Min, vmax=Max),
-        label=PlotConf["ColorBarLabel"])
+    cbar = mpl.colorbar.ColorbarBase(color_ax,
+                                     cmap=cmap,
+                                     norm=mpl.colors.Normalize(vmin=Min, vmax=Max),
+                                     ticks=PlotConf["ColorBarTicks"],
+                                     label=PlotConf["ColorBarLabel"])
 
     return normalize, cmap
 
-def drawMap(PlotConf, ax,):
-    Map = Basemap(projection = 'cyl',
-    llcrnrlat  = PlotConf["LatMin"]-0,
-    urcrnrlat  = PlotConf["LatMax"]+0,
-    llcrnrlon  = PlotConf["LonMin"]-0,
-    urcrnrlon  = PlotConf["LonMax"]+0,
-    lat_ts     = 10,
-    resolution = 'l',
-    ax         = ax)
-    
-    if not ("xTicks" in PlotConf or "yTicks" in PlotConf):
-        # Draw map meridians
-        Map.drawmeridians(
-        np.arange(PlotConf["LonMin"],PlotConf["LonMax"]+1,PlotConf["LonStep"]),
-        labels = [0,0,0,1],
-        fontsize = 6,
+
+def drawMap(PlotConf, ax, ):
+    Map = Basemap(projection='cyl',
+                  llcrnrlat=PlotConf["LatMin"] - 0,
+                  urcrnrlat=PlotConf["LatMax"] + 0,
+                  llcrnrlon=PlotConf["LonMin"] - 0,
+                  urcrnrlon=PlotConf["LonMax"] + 0,
+                  lat_ts=10,
+                  resolution='l',
+                  ax=ax)
+
+    # Draw map meridians
+    Map.drawmeridians(
+        np.arange(PlotConf["LonMin"], PlotConf["LonMax"] + 1, PlotConf["LonStep"]),
+        labels=[0, 0, 0, 1],
+        fontsize=6,
         linewidth=0.2)
-            
-        # Draw map parallels
-        Map.drawparallels(
-        np.arange(PlotConf["LatMin"],PlotConf["LatMax"]+1,PlotConf["LatStep"]),
-        labels = [1,0,0,0],
-        fontsize = 6,
+
+    # Draw map parallels
+    Map.drawparallels(
+        np.arange(PlotConf["LatMin"], PlotConf["LatMax"] + 1, PlotConf["LatStep"]),
+        labels=[1, 0, 0, 0],
+        fontsize=6,
         linewidth=0.2)
 
     # Draw coastlines
@@ -159,166 +136,168 @@ def drawMap(PlotConf, ax,):
     # Draw countries
     Map.drawcountries(linewidth=0.25)
 
+
 def generateLinesPlot(PlotConf):
+    LineWidth = 1.5
+
     fig, ax = createFigure(PlotConf)
 
+    prepareAxis(PlotConf, ax)
+
     for key in PlotConf:
+        if key == "LineWidth":
+            LineWidth = PlotConf["LineWidth"]
         if key == "ColorBar":
             normalize, cmap = prepareColorBar(PlotConf, ax, PlotConf["zData"])
         if key == "Map" and PlotConf[key] == True:
             drawMap(PlotConf, ax)
 
     for Label in PlotConf["yData"].keys():
-        LineWidth = 1.5
-        Alpha = 1
-
-        for key in PlotConf:
-            if key == "LineWidth":
-                LineWidth = PlotConf["LineWidth"]
-            if key == "Alpha":
-                Alpha = PlotConf["Alpha"]
-
-        if "MarkerSize" in PlotConf and Label in PlotConf["MarkerSize"]:
-            LineWidth = PlotConf["MarkerSize"][Label]
-
-        if "ColorBar" in PlotConf:
-            if "Color" in PlotConf and Label in PlotConf["Color"]:
-                ax.scatter(PlotConf["xData"][Label], PlotConf["yData"][Label],
-                marker = PlotConf["Marker"],
-                linewidth = LineWidth,
-                s = LineWidth,
-                alpha=Alpha,
-                c = PlotConf["Color"][Label])
-
-            else:
-                ax.scatter(PlotConf["xData"][Label], PlotConf["yData"][Label],
-                marker = PlotConf["Marker"],
-                linewidth = LineWidth,
-                s = LineWidth,
-                alpha=Alpha,
-                c = cmap(normalize(np.array(PlotConf["zData"][Label]))))
-
+        if "Background" in PlotConf and Label in PlotConf["Background"]:
+            ax.scatter(PlotConf["xData"][Label], PlotConf["yData"][Label],
+                       marker=PlotConf["BackMarker"],
+                       s=PlotConf["BackLineWidth"],
+                       zorder=1,
+                       c=PlotConf["ColorMarker"] if "ColorMarker" in PlotConf else None)
+        elif "SecondAxis" in PlotConf and Label in PlotConf["SecondAxis"]:
+            ax2 = ax.twinx()
+            ax2.set_ylabel(PlotConf["y2Label"])
+            ax2.set_ylim(PlotConf["y2Lim"][0], PlotConf["y2Lim"][1])
+            ax2.scatter(PlotConf["xData"][Label], PlotConf["yData"][Label],
+                        marker=PlotConf["Marker"],
+                        s=LineWidth,
+                        c="black",
+                        label=Label,
+                        zorder=10)
+            ln2, lab2 = ax2.get_legend_handles_labels()
+        elif "ColorBar" in PlotConf:
+            ax.scatter(PlotConf["xData"][Label], PlotConf["yData"][Label],
+                       marker=PlotConf["Marker"],
+                       s=LineWidth,
+                       zorder=10,
+                       c=cmap(normalize(np.array(PlotConf["zData"][Label]))))
         else:
-            ax.plot(PlotConf["xData"][Label], PlotConf["yData"][Label],
-            PlotConf["Marker"],
-            linewidth = LineWidth,
-            markersize = LineWidth,
-            alpha=Alpha)#,
-            # c = PlotConf["Color"][Label])
+            ax.scatter(PlotConf["xData"][Label], PlotConf["yData"][Label],
+                       marker=PlotConf["Marker"],
+                       s=LineWidth,
+                       label=Label,
+                       zorder=10)
+            ln1, lab1 = ax.get_legend_handles_labels()
 
-    for key in PlotConf:
-        if key == "Legend" and PlotConf[key] == 1:
-            Legend = plt.legend(PlotConf["yData"].keys())
-            for iHandle in range(len(Legend.legendHandles)):
-                Legend.legendHandles[iHandle]._legmarker.set_markersize(7)
+    if "HLine" in PlotConf.keys():
+        for Line in PlotConf["HLine"]:
+            ax.hlines(Line[0], Line[1], Line[2], color="black", linestyle='--', linewidth=0.75)
+    if "VLine" in PlotConf.keys():
+        for Line in PlotConf["VLine"]:
+            ax.vlines(Line[0], Line[1], Line[2], color="black", linestyle='--', linewidth=0.75)
+    if "SLine" in PlotConf.keys():
+        ax.plot(PlotConf["SLine"][0], PlotConf["SLine"][1], color="black", linestyle='--', linewidth=0.75)
+
+    if "Legend" in PlotConf.keys():
+        if "SecondAxis" not in PlotConf:
+            plt.legend(PlotConf["Legend"], markerscale=4.0, loc="upper right")
+        elif "SecondAxis" in PlotConf:
+            ln = ln1 + ln2
+            lab = lab1 + lab2
+            ax.legend(ln, lab, markerscale=4.0, loc="upper right")
+
+    saveFigure(fig, PlotConf["Path"])
+
+
+def generateBarsPlot(PlotConf):
+    BarWidth = 1.0
+
+    fig, ax = createFigure(PlotConf)
 
     prepareAxis(PlotConf, ax)
-
-    saveFigure(fig, PlotConf["Path"])
-    plt.close('all')
-
-def generatePolarPlot(PlotConf):
-    LineWidth = 1.5
-
-    fig, ax = createFigure(PlotConf, 1)
+    ax.set_xticks([])
 
     for key in PlotConf:
+        if key == "BarWidth":
+            BarWidth = PlotConf["BarWidth"]
 
-        if key == "Title":
-            ax.set_title(PlotConf["Title"])
+    TableInfo = []
+    for Label in PlotConf["yData"].keys():
+        ax.bar(PlotConf["xData"][Label], PlotConf["yData"][Label], width=BarWidth)
+        TableInfo.append(PlotConf["yData"][Label])
 
-        if key == "Grid" and PlotConf[key] == True:
-            ax.grid(linestyle='--', linewidth=0.5, which='both')
+    Rows = PlotConf["Legend"]
+    Cols = ["G" + "%02d" % i for i in range(1, 33, 1)]
+    ax.table(cellText=TableInfo, rowLabels=Rows, colLabels=Cols, loc="bottom")
 
-        if key == "LineWidth":
-            LineWidth = PlotConf["LineWidth"]
-
-        if key == "ColorBar":
-            normalize, cmap = prepareColorBar(PlotConf, ax, PlotConf["zData"], 1)
-
-    for Label in PlotConf["rData"].keys():
-        if "ColorBar" in PlotConf:
-            ax.scatter(PlotConf["tData"][Label], PlotConf["rData"][Label],
-            marker = PlotConf["Marker"],
-            linewidth = LineWidth,
-            s = LineWidth,
-            c = cmap(normalize(np.array(PlotConf["zData"][Label]))))
-
-        else:
-            ax.plot(PlotConf["tData"][Label], PlotConf["rData"][Label], 'ro',
-            marker = PlotConf["Marker"],
-            linewidth = LineWidth,
-            markersize = LineWidth)
-
-        ax.set_rmin(90)
-        ax.set_rmax(0)
-        ax.set_xticks([0, np.pi/2, np.pi, (3/2)*np.pi])
-        ax.set_xticklabels(['E', 'N', 'W', 'S'])
+    for key in PlotConf:
+        if key == "Legend":
+            plt.legend(PlotConf["Legend"])
 
     saveFigure(fig, PlotConf["Path"])
-    plt.close('all')
 
-def generateStatsPlot(PlotConf):
-    BarWidth = 0.3
+
+def generateHistogram(PlotConf):
+    BarWidth = 0.005
 
     fig, ax = createFigure(PlotConf)
 
     prepareAxis(PlotConf, ax)
 
-    CellText = []
-    StatsList = list(list(PlotConf["yData"].values())[0].keys())
-    NStats = len(StatsList)
-    RowColors = plt.cm.rainbow(np.linspace(0.3, 0.9, NStats))[::-1]
-    ColColors = plt.cm.binary(np.linspace(0.2, 0.2, len(PlotConf["xData"])))
-    Colors = {}
+    for key in PlotConf:
+        if key == "BarWidth":
+            BarWidth = PlotConf["BarWidth"]
 
-    for iLabel, Label in enumerate(PlotConf["xData"]):
-        Colors[iLabel] = {}
+    ax.bar(PlotConf["xData"], PlotConf["yData"], width=BarWidth, align="edge")
+    ax.plot(PlotConf["x2Data"], PlotConf["y2Data"], c="orange")
 
-        for iStat, Stat in enumerate(PlotConf["yData"][Label].values()):
-            Colors[iLabel][iStat] = iStat
-
-            ax.bar(iLabel, Stat, 
-            width = BarWidth,
-            color=RowColors[Colors[iLabel][iStat]])
-
-    for Stat in StatsList:
-        List = []
-        for iLabel, Label in enumerate(PlotConf["xData"]):
-            List.append("%.2f" % PlotConf["yData"][Label][Stat])
-        CellText.append(List)
-
-    ax.set_xticks(range(len(PlotConf["xData"])))
-    for tick in ax.xaxis.get_major_ticks():
-        # tick.tick1On = tick.tick2On = False
-        # tick.label1On = tick.label2On = False	
-        tick.tick1line.set_visible(False)
-        tick.tick2line.set_visible(False) 
-        tick.label1.set_visible(False)
-        tick.label2.set_visible(False)
-
-    ax.set_xlim(left=-.5, right=len(PlotConf["xData"]) - 1 + .5)
-
-    ax.table(cellText=CellText,
-    rowLabels=StatsList,
-    rowColours=RowColors,
-    colLabels=PlotConf["xData"],
-    colColours=ColColors,
-    cellLoc='center',
-    loc='bottom',
-    fontsize='small')
-
-    plt.subplots_adjust(left=0.22, bottom=0.2)
+    for key in PlotConf:
+        if key == "Legend":
+            plt.legend(PlotConf["Legend"])
 
     saveFigure(fig, PlotConf["Path"])
-    plt.close('all')
+
+
+def generateMapPlot(PlotConf):
+    LineWidth = 15.0
+
+    fig, ax = createFigure(PlotConf)
+
+    prepareAxis(PlotConf, ax)
+
+    for key in PlotConf:
+        if key == "LineWidth":
+            LineWidth = PlotConf["LineWidth"]
+        if key == "ColorBar":
+            normalize, cmap = prepareColorBar(PlotConf, ax, PlotConf["zData"])
+        if key == "Map" and PlotConf[key] == True:
+            drawMap(PlotConf, ax)
+
+    ax.scatter(PlotConf["xData"], PlotConf["yData"],
+               marker=PlotConf["Marker"],
+               s=LineWidth,
+               zorder=10,
+               c=cmap(normalize(np.array(PlotConf["zData"]))))
+
+    for i, label1 in enumerate(PlotConf["nData"]):
+        ax.annotate("%s" % label1, xy=(PlotConf["xData"][i], PlotConf["yData"][i]),
+                    xytext=(PlotConf["xData"][i] - 2.0, (PlotConf["yData"][i] + 0.7)))
+
+    for j, label2 in enumerate(PlotConf["zData"]):
+        if "Decimal" in PlotConf.keys():
+            ax.annotate("%.1e" % label2, xy=(PlotConf["xData"][j], PlotConf["yData"][j]),
+                        xytext=(PlotConf["xData"][j] - 2.0, (PlotConf["yData"][j] - 1.5)))
+        elif "Integer" in PlotConf.keys():
+            ax.annotate("%d" % label2, xy=(PlotConf["xData"][j], PlotConf["yData"][j]),
+                        xytext=(PlotConf["xData"][j] - 1.0, (PlotConf["yData"][j] - 1.5)))
+        else:
+            ax.annotate("%.2f" % label2, xy=(PlotConf["xData"][j], PlotConf["yData"][j]),
+                        xytext=(PlotConf["xData"][j] - 2.0, (PlotConf["yData"][j] - 1.5)))
+
+    saveFigure(fig, PlotConf["Path"])
+
 
 def generatePlot(PlotConf):
-    if(PlotConf["Type"] in ["Lines", 'Map']):
+    if (PlotConf["Type"] == "Lines"):
         generateLinesPlot(PlotConf)
-    
-    if(PlotConf["Type"] == "Polar"):
-        generatePolarPlot(PlotConf)
-    
-    if(PlotConf["Type"] == "Stats"):
-        generateStatsPlot(PlotConf)
+    elif (PlotConf["Type"] == "Bars"):
+        generateBarsPlot(PlotConf)
+    elif (PlotConf["Type"] == "Hist"):
+        generateHistogram(PlotConf)
+    elif (PlotConf["Type"] == "Map"):
+        generateMapPlot(PlotConf)

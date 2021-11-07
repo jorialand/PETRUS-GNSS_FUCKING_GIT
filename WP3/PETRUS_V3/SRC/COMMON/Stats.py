@@ -13,6 +13,7 @@ def UpdateHist(Hist, Value, Resolution):
     Bin = float(int(Value/Resolution)) * Resolution
     if Bin in Hist:
         Hist[Bin] = Hist[Bin] + 1
+
     else:
         Hist[Bin] = 1
 

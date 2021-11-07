@@ -15,21 +15,21 @@ from collections import OrderedDict
 
 # Performances plots configuration flags
 ConfPerf = OrderedDict({})
-ConfPerf["PLOT_VPE_HISTOGRAM"] = 1#
+ConfPerf["PLOT_VPE_HISTOGRAM"] =1#
 ConfPerf["PLOT_AVAILABILITY"] = 1#
-ConfPerf["PLOT_CONT_RISK"] = 1#
-ConfPerf["PLOT_HPE95"] = 1#
-ConfPerf["PLOT_VPE95"] = 1#
-ConfPerf["PLOT_MAX_HSI"] = 1#
-ConfPerf["PLOT_MAX_VSI"] = 1#
-ConfPerf["PLOT_MIN_HPL"] = 1#
-ConfPerf["PLOT_MIN_VPL"] = 1#
-ConfPerf["PLOT_MAX_HPL"] = 1#
-ConfPerf["PLOT_MAX_VPL"] = 1#
-ConfPerf["PLOT_MIN_SATNUM"] = 1#
-ConfPerf["PLOT_MAX_SATNUM"] = 1#
-ConfPerf["PLOT_MAX_HDOP"] = 1#
-ConfPerf["PLOT_MAX_VDOP"] = 1#
+ConfPerf["PLOT_CONT_RISK"] =    1#
+ConfPerf["PLOT_HPE95"] =        1#
+ConfPerf["PLOT_VPE95"] =        1#
+ConfPerf["PLOT_MAX_HSI"] =      1#
+ConfPerf["PLOT_MAX_VSI"] =      1#
+ConfPerf["PLOT_MIN_HPL"] =      1#
+ConfPerf["PLOT_MIN_VPL"] =      1#
+ConfPerf["PLOT_MAX_HPL"] =      1#
+ConfPerf["PLOT_MAX_VPL"] =      1#
+ConfPerf["PLOT_MIN_SATNUM"] =   1#
+ConfPerf["PLOT_MAX_SATNUM"] =   1#
+ConfPerf["PLOT_MAX_HDOP"] =     1#
+ConfPerf["PLOT_MAX_VDOP"] =     1#
 
 def initPlot(PerfFilesList, PlotConf, Title, Label, Service):
     # Compute information from PerfFilesList
@@ -97,17 +97,20 @@ def plotAvailability(Service, PerfFilesList, PerfData):
     PlotConf["ColorBarLabel"] = "Availability Percentage [%]"
     PlotConf["ColorBarMin"] = min(Avail)
     PlotConf["ColorBarMax"] = 100.0
-    # PlotConf["ColorBarTicks"] = None
+    PlotConf["ColorBarTicks"] = None
 
     # Plotting
-    PlotConf["xData"] = {}
-    PlotConf["yData"] = {}
-    PlotConf["zData"] = {}
-    PlotConf["nData"] = {}
-    PlotConf["xData"][0] = Lon
-    PlotConf["yData"][0] = Lat
-    PlotConf["zData"][0] = Avail
-    PlotConf["nData"][0] = Rcvr
+    # PlotConf["xData"] = {}
+    # PlotConf["yData"] = {}
+    # PlotConf["zData"] = {}
+    # PlotConf["nData"] = {}
+    PlotConf["xData"] = Lon
+    PlotConf["yData"] = Lat
+    PlotConf["zData"] = Avail
+    PlotConf["nData"] = Rcvr
+
+    # Other settings
+    PlotConf['AddAnnotations'] = True
 
     # Call generatePlot from Plots library
     generatePlot(PlotConf)
@@ -147,13 +150,20 @@ def plotContRisk(Service, PerfFilesList, PerfData):
     PlotConf["ColorBarLabel"] = "Continuity Risk"
     PlotConf["ColorBarMin"] = min(Cont)
     PlotConf["ColorBarMax"] = max(Cont)
-    # PlotConf["ColorBarTicks"] = None
+    PlotConf["ColorBarTicks"] = None
 
     # Plotting
+    # PlotConf["xData"] = {}
+    # PlotConf["yData"] = {}
+    # PlotConf["zData"] = {}
+    # PlotConf["nData"] = {}
     PlotConf["xData"] = Lon
     PlotConf["yData"] = Lat
     PlotConf["zData"] = Cont
     PlotConf["nData"] = Rcvr
+
+    # Other settings
+    PlotConf['AddAnnotations'] = True
 
     # Call generatePlot from Plots library
     generatePlot(PlotConf)
@@ -192,13 +202,20 @@ def plotHPE95(Service, PerfFilesList, PerfData):
     PlotConf["ColorBarLabel"] = "HPE 95% [m]"
     PlotConf["ColorBarMin"] = min(Hpe95)
     PlotConf["ColorBarMax"] = max(Hpe95)
-    # PlotConf["ColorBarTicks"] = None
+    PlotConf["ColorBarTicks"] = None
 
     # Plotting
+    # PlotConf["xData"] = {}
+    # PlotConf["yData"] = {}
+    # PlotConf["zData"] = {}
+    # PlotConf["nData"] = {}
     PlotConf["xData"] = Lon
     PlotConf["yData"] = Lat
     PlotConf["zData"] = Hpe95
     PlotConf["nData"] = Rcvr
+
+    # Other settings
+    PlotConf['AddAnnotations'] = True
 
     # Call generatePlot from Plots library
     generatePlot(PlotConf)
@@ -237,58 +254,20 @@ def plotVPE95(Service, PerfFilesList, PerfData):
     PlotConf["ColorBarLabel"] = "VPE 95% [m]"
     PlotConf["ColorBarMin"] = min(Vpe95)
     PlotConf["ColorBarMax"] = max(Vpe95)
-    # PlotConf["ColorBarTicks"] = None
+    PlotConf["ColorBarTicks"] = None
 
     # Plotting
+    # PlotConf["xData"] = {}
+    # PlotConf["yData"] = {}
+    # PlotConf["zData"] = {}
+    # PlotConf["nData"] = {}
     PlotConf["xData"] = Lon
     PlotConf["yData"] = Lat
     PlotConf["zData"] = Vpe95
     PlotConf["nData"] = Rcvr
 
-    # Call generatePlot from Plots library
-    generatePlot(PlotConf)
-
-
-# Plot extrapolated VPE map
-def plotExtVPE(Service, PerfFilesList, PerfData):
-    # Graph settings definition
-    PlotConf = {}
-    initPlot(PerfFilesList, PlotConf, "Extrapolated VPE", "EXT_VPE", Service)
-
-    PlotConf["Type"] = "Map"
-    PlotConf["FigSize"] = (12.6, 10.4)
-
-    PlotConf["LonMin"] = -35
-    PlotConf["LonMax"] = 40
-    PlotConf["LatMin"] = 10
-    PlotConf["LatMax"] = 85
-    PlotConf["LonStep"] = 5
-    PlotConf["LatStep"] = 5
-
-    PlotConf["Grid"] = True
-    PlotConf["Map"] = True
-
-    PlotConf["Marker"] = 'o'
-
-    # Prepare data to be plotted
-    FilterCond = PerfData[PerfIdx["SERVICE"]] == Service
-    Lon = PerfData[PerfIdx["LON"]][FilterCond].to_numpy()
-    Lat = PerfData[PerfIdx["LAT"]][FilterCond].to_numpy()
-    ExtVpe = PerfData[PerfIdx["EXTVPE"]][FilterCond].to_numpy()
-    Rcvr = PerfData[PerfIdx["RCVR"]][FilterCond].to_numpy()
-
-    # Colorbar definition
-    PlotConf["ColorBar"] = "gnuplot"
-    PlotConf["ColorBarLabel"] = "Extrapolated VPE [m]"
-    PlotConf["ColorBarMin"] = 0.0
-    PlotConf["ColorBarMax"] = 10.0
-    # PlotConf["ColorBarTicks"] = None
-
-    # Plotting
-    PlotConf["xData"] = Lon
-    PlotConf["yData"] = Lat
-    PlotConf["zData"] = ExtVpe
-    PlotConf["nData"] = Rcvr
+    # Other settings
+    PlotConf['AddAnnotations'] = True
 
     # Call generatePlot from Plots library
     generatePlot(PlotConf)
@@ -327,13 +306,20 @@ def plotMaxHSI(Service, PerfFilesList, PerfData):
     PlotConf["ColorBarLabel"] = "Maximum HSI [m]"
     PlotConf["ColorBarMin"] = min(Hsi)
     PlotConf["ColorBarMax"] = max(Hsi)
-    # PlotConf["ColorBarTicks"] = None
+    PlotConf["ColorBarTicks"] = None
 
     # Plotting
+    # PlotConf["xData"] = {}
+    # PlotConf["yData"] = {}
+    # PlotConf["zData"] = {}
+    # PlotConf["nData"] = {}
     PlotConf["xData"] = Lon
     PlotConf["yData"] = Lat
     PlotConf["zData"] = Hsi
     PlotConf["nData"] = Rcvr
+
+    # Other settings
+    PlotConf['AddAnnotations'] = True
 
     # Call generatePlot from Plots library
     generatePlot(PlotConf)
@@ -372,13 +358,20 @@ def plotMaxVSI(Service, PerfFilesList, PerfData):
     PlotConf["ColorBarLabel"] = "Maximum VSI [m]"
     PlotConf["ColorBarMin"] = min(Vsi)
     PlotConf["ColorBarMax"] = max(Vsi)
-    # PlotConf["ColorBarTicks"] = None
+    PlotConf["ColorBarTicks"] = None
 
     # Plotting
+    # PlotConf["xData"] = {}
+    # PlotConf["yData"] = {}
+    # PlotConf["zData"] = {}
+    # PlotConf["nData"] = {}
     PlotConf["xData"] = Lon
     PlotConf["yData"] = Lat
-    PlotConf["zData"] = Vsi
+    PlotConf["zData"]= Vsi
     PlotConf["nData"] = Rcvr
+
+    # Other settings
+    PlotConf['AddAnnotations'] = True
 
     # Call generatePlot from Plots library
     generatePlot(PlotConf)
@@ -417,13 +410,20 @@ def plotMinHPL(Service, PerfFilesList, PerfData):
     PlotConf["ColorBarLabel"] = "Minimum HPL [m]"
     PlotConf["ColorBarMin"] = 0.0
     PlotConf["ColorBarMax"] = 20.0
-    # PlotConf["ColorBarTicks"] = None
+    PlotConf["ColorBarTicks"] = None
 
     # Plotting
+    # PlotConf["xData"] = {}
+    # PlotConf["yData"] = {}
+    # PlotConf["zData"] = {}
+    # PlotConf["nData"] = {}
     PlotConf["xData"] = Lon
     PlotConf["yData"] = Lat
     PlotConf["zData"] = Hpl
     PlotConf["nData"] = Rcvr
+
+    # Other settings
+    PlotConf['AddAnnotations'] = True
 
     # Call generatePlot from Plots library
     generatePlot(PlotConf)
@@ -462,13 +462,20 @@ def plotMinVPL(Service, PerfFilesList, PerfData):
     PlotConf["ColorBarLabel"] = "Minimum VPL [m]"
     PlotConf["ColorBarMin"] = 0.0
     PlotConf["ColorBarMax"] = 20.0
-    # PlotConf["ColorBarTicks"] = None
+    PlotConf["ColorBarTicks"] = None
 
     # Plotting
+    # PlotConf["xData"] = {}
+    # PlotConf["yData"] = {}
+    # PlotConf["zData"] = {}
+    # PlotConf["nData"] = {}
     PlotConf["xData"] = Lon
     PlotConf["yData"] = Lat
     PlotConf["zData"] = Vpl
     PlotConf["nData"] = Rcvr
+
+    # Other settings
+    PlotConf['AddAnnotations'] = True
 
     # Call generatePlot from Plots library
     generatePlot(PlotConf)
@@ -507,13 +514,20 @@ def plotMaxHPL(Service, PerfFilesList, PerfData):
     PlotConf["ColorBarLabel"] = "Maximum HPL [m]"
     PlotConf["ColorBarMin"] = 0.0
     PlotConf["ColorBarMax"] = 200.0
-    # PlotConf["ColorBarTicks"] = None
+    PlotConf["ColorBarTicks"] = None
 
     # Plotting
+    # PlotConf["xData"] = {}
+    # PlotConf["yData"] = {}
+    # PlotConf["zData"] = {}
+    # PlotConf["nData"] = {}
     PlotConf["xData"] = Lon
     PlotConf["yData"] = Lat
-    PlotConf["zData"] = Hpl
+    PlotConf["zData"]= Hpl
     PlotConf["nData"] = Rcvr
+
+    # Other settings
+    PlotConf['AddAnnotations'] = True
 
     # Call generatePlot from Plots library
     generatePlot(PlotConf)
@@ -552,13 +566,20 @@ def plotMaxVPL(Service, PerfFilesList, PerfData):
     PlotConf["ColorBarLabel"] = "Maximum VPL [m]"
     PlotConf["ColorBarMin"] = 0.0
     PlotConf["ColorBarMax"] = 200.0
-    # PlotConf["ColorBarTicks"] = None
+    PlotConf["ColorBarTicks"] = None
 
     # Plotting
+    # PlotConf["xData"] = {}
+    # PlotConf["yData"] = {}
+    # PlotConf["zData"] = {}
+    # PlotConf["nData"] = {}
     PlotConf["xData"] = Lon
     PlotConf["yData"] = Lat
     PlotConf["zData"] = Vpl
     PlotConf["nData"] = Rcvr
+
+    # Other settings
+    PlotConf['AddAnnotations'] = True
 
     # Call generatePlot from Plots library
     generatePlot(PlotConf)
@@ -598,13 +619,20 @@ def plotMinSats(Service, PerfFilesList, PerfData):
     PlotConf["ColorBarLabel"] = "Minimum Number of Satellites"
     PlotConf["ColorBarMin"] = min(MinSats)
     PlotConf["ColorBarMax"] = max(MinSats)
-    PlotConf["ColorBarTicks"] = range(int(min(MinSats)), int(max(MinSats)) + 1)
+    PlotConf["ColorBarTicks"] = range(int(PlotConf["ColorBarMin"]), int(PlotConf["ColorBarMax"]) + 1)
 
     # Plotting
+    # PlotConf["xData"] = {}
+    # PlotConf["yData"] = {}
+    # PlotConf["zData"] = {}
+    # PlotConf["nData"] = {}
     PlotConf["xData"] = Lon
     PlotConf["yData"] = Lat
     PlotConf["zData"] = MinSats
     PlotConf["nData"] = Rcvr
+
+    # Other settings
+    PlotConf['AddAnnotations'] = True
 
     # Call generatePlot from Plots library
     generatePlot(PlotConf)
@@ -647,10 +675,17 @@ def plotMaxSats(Service, PerfFilesList, PerfData):
     PlotConf["ColorBarTicks"] = range(int(min(MaxSats)), int(max(MaxSats)) + 1)
 
     # Plotting
+    # PlotConf["xData"] = {}
+    # PlotConf["yData"] = {}
+    # PlotConf["zData"] = {}
+    # PlotConf["nData"] ={}
     PlotConf["xData"] = Lon
     PlotConf["yData"] = Lat
     PlotConf["zData"] = MaxSats
     PlotConf["nData"] = Rcvr
+
+    # Other settings
+    PlotConf['AddAnnotations'] = True
 
     # Call generatePlot from Plots library
     generatePlot(PlotConf)
@@ -689,9 +724,13 @@ def plotMaxHDOP(Service, PerfFilesList, PerfData):
     PlotConf["ColorBarLabel"] = "Maximum HDOP [m]"
     PlotConf["ColorBarMin"] = 0.0
     PlotConf["ColorBarMax"] = 20.0
-    # PlotConf["ColorBarTicks"] = None
+    PlotConf["ColorBarTicks"] = None
 
     # Plotting
+    # PlotConf["xData"] = {}
+    # PlotConf["yData"] = {}
+    # PlotConf["zData"] = {}
+    # PlotConf["nData"] = {}
     PlotConf["xData"] = Lon
     PlotConf["yData"] = Lat
     PlotConf["zData"] = Hdop
@@ -734,13 +773,17 @@ def plotMaxVDOP(Service, PerfFilesList, PerfData):
     PlotConf["ColorBarLabel"] = "Maximum VDOP [m]"
     PlotConf["ColorBarMin"] = 0.0
     PlotConf["ColorBarMax"] = 20.0
-    # PlotConf["ColorBarTicks"] = None
+    PlotConf["ColorBarTicks"] = None
 
     # Plotting
+    # PlotConf["xData"] = {}
+    # PlotConf["yData"] = {}
+    # PlotConf["zData"] = {}
+    # PlotConf["nData"] = {}
     PlotConf["xData"] = Lon
     PlotConf["yData"] = Lat
     PlotConf["zData"] = Vdop
-    PlotConf["nData"] = Rcvr
+    PlotConf["nData"]= Rcvr
 
     # Call generatePlot from Plots library
     generatePlot(PlotConf)
